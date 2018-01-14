@@ -455,13 +455,19 @@ pub fn const_eval_provider<'a, 'tcx>(
         }
     };
 
-    eval_body_and_ecx(tcx, cid, None, key.param_env).0.map(|(miri_value, _, miri_ty)| {
+    let (res, ecx) = eval_body_and_ecx(tcx, cid, None, key.param_env);
+    res.map(|(miri_value, _, miri_ty)| {
         tcx.mk_const(ty::Const {
             val: ConstVal::Value(miri_value),
             ty: miri_ty,
         })
-    }).map_err(|err| ConstEvalErr {
+    }).map_err(|mut err| {
+        if tcx.is_static(def_id).is_some() {
+            ecx.report(&mut err, true);
+        }
+        ConstEvalErr {
         kind: err.into(),
         span,
+        }
     })
 }

@@ -253,7 +253,7 @@ pub fn trans_static<'a, 'tcx>(cx: &CodegenCx<'a, 'tcx>,
 
         let v = match ::mir::trans_static_initializer(cx, def_id) {
             Ok(v) => v,
-            // FIXME: report this?
+            // Error has already been reported
             Err(_) => return,
         };
 
