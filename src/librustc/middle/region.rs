@@ -1483,9 +1483,9 @@ pub fn provide(providers: &mut Providers) {
     };
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for ScopeTree {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for ScopeTree {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         let ScopeTree {
             root_body,

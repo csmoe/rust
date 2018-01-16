@@ -675,9 +675,9 @@ impl<'tcx> TypeckTables<'tcx> {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for TypeckTables<'gcx> {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for TypeckTables<'gcx> {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         let ty::TypeckTables {
             local_id_root,
@@ -1361,13 +1361,14 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         self.cstore.crate_data_as_rc_any(cnum)
     }
 
-    pub fn create_stable_hashing_context(self) -> StableHashingContext<'gcx> {
+    pub fn create_stable_hashing_context(self) -> StableHashingContext<'a, 'gcx> {
         let krate = self.dep_graph.with_ignore(|| self.gcx.hir.krate());
 
         StableHashingContext::new(self.sess,
                                   krate,
                                   self.hir.definitions(),
-                                  self.cstore)
+                                  self.cstore,
+                                  Some(&self.interpret_interner))
     }
 
     // This method makes sure that we have a DepNode and a Fingerprint for

@@ -41,7 +41,7 @@ pub(super) struct NodeCollector<'a, 'hir> {
     dep_graph: &'a DepGraph,
     definitions: &'a definitions::Definitions,
 
-    hcx: StableHashingContext<'a>,
+    hcx: StableHashingContext<'a, 'a>,
 
     // We are collecting DepNode::HirBody hashes here so we can compute the
     // crate hash from then later on.
@@ -52,7 +52,7 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
     pub(super) fn root(krate: &'hir Crate,
                        dep_graph: &'a DepGraph,
                        definitions: &'a definitions::Definitions,
-                       hcx: StableHashingContext<'a>)
+                       hcx: StableHashingContext<'a, 'a>)
                 -> NodeCollector<'a, 'hir> {
         let root_mod_def_path_hash = definitions.def_path_hash(CRATE_DEF_INDEX);
 
@@ -235,7 +235,7 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
         self.parent_node = parent_node;
     }
 
-    fn with_dep_node_owner<T: HashStable<StableHashingContext<'a>>,
+    fn with_dep_node_owner<T: HashStable<StableHashingContext<'a, 'a>>,
                            F: FnOnce(&mut Self)>(&mut self,
                                                  dep_node_owner: DefIndex,
                                                  item_like: &T,
@@ -513,11 +513,11 @@ struct HirItemLike<T> {
     hash_bodies: bool,
 }
 
-impl<'hir, T> HashStable<StableHashingContext<'hir>> for HirItemLike<T>
-    where T: HashStable<StableHashingContext<'hir>>
+impl<'a, 'hir, T> HashStable<StableHashingContext<'a, 'hir>> for HirItemLike<T>
+    where T: HashStable<StableHashingContext<'a, 'hir>>
 {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'hir>,
+                                          hcx: &mut StableHashingContext<'a, 'hir>,
                                           hasher: &mut StableHasher<W>) {
         hcx.while_hashing_hir_bodies(self.hash_bodies, |hcx| {
             self.item_like.hash_stable(hcx, hasher);

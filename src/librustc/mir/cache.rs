@@ -35,9 +35,9 @@ impl serialize::Decodable for Cache {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for Cache {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for Cache {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          _: &mut StableHashingContext<'gcx>,
+                                          _: &mut StableHashingContext<'a, 'gcx>,
                                           _: &mut StableHasher<W>) {
         // do nothing
     }

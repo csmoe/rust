@@ -20,9 +20,9 @@ pub struct BorrowCheckResult {
     pub used_mut_nodes: FxHashSet<HirId>,
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for BorrowCheckResult {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for BorrowCheckResult {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         let BorrowCheckResult {
             ref used_mut_nodes,

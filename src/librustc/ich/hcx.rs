@@ -14,7 +14,7 @@ use hir::map::DefPathHash;
 use hir::map::definitions::Definitions;
 use ich::{self, CachingCodemapView, Fingerprint};
 use middle::cstore::CrateStore;
-use ty::{TyCtxt, fast_reject};
+use ty::{TyCtxt, fast_reject, InterpretInterner};
 use session::Session;
 
 use std::cmp::Ord;
@@ -46,7 +46,7 @@ pub fn compute_ignored_attr_names() -> FxHashSet<Symbol> {
 /// a reference to the TyCtxt) and it holds a few caches for speeding up various
 /// things (e.g. each DefId/DefPath is only hashed once).
 #[derive(Clone)]
-pub struct StableHashingContext<'gcx> {
+pub struct StableHashingContext<'a, 'gcx: 'a> {
     sess: &'gcx Session,
     definitions: &'gcx Definitions,
     cstore: &'gcx CrateStore,
@@ -54,6 +54,7 @@ pub struct StableHashingContext<'gcx> {
     hash_spans: bool,
     hash_bodies: bool,
     node_id_hashing_mode: NodeIdHashingMode,
+    pub interpret_interner: Option<&'a RefCell<InterpretInterner<'gcx>>>,
 
     // Very often, we are hashing something that does not need the
     // CachingCodemapView, so we initialize it lazily.
@@ -81,14 +82,15 @@ impl<'gcx> BodyResolver<'gcx> {
     }
 }
 
-impl<'gcx> StableHashingContext<'gcx> {
+impl<'a, 'gcx> StableHashingContext<'a, 'gcx> {
     // The `krate` here is only used for mapping BodyIds to Bodies.
     // Don't use it for anything else or you'll run the risk of
     // leaking data out of the tracking system.
     pub fn new(sess: &'gcx Session,
                krate: &'gcx hir::Crate,
                definitions: &'gcx Definitions,
-               cstore: &'gcx CrateStore)
+               cstore: &'gcx CrateStore,
+               interpret_interner: Option<&'a RefCell<InterpretInterner<'gcx>>>)
                -> Self {
         let hash_spans_initial = !sess.opts.debugging_opts.incremental_ignore_spans;
 
@@ -102,6 +104,7 @@ impl<'gcx> StableHashingContext<'gcx> {
             hash_spans: hash_spans_initial,
             hash_bodies: true,
             node_id_hashing_mode: NodeIdHashingMode::HashDefPath,
+            interpret_interner,
         }
     }
 
@@ -193,27 +196,27 @@ impl<'gcx> StableHashingContext<'gcx> {
 }
 
 impl<'a, 'gcx, 'lcx> StableHashingContextProvider for TyCtxt<'a, 'gcx, 'lcx> {
-    type ContextType = StableHashingContext<'gcx>;
+    type ContextType = StableHashingContext<'a, 'gcx>;
     fn create_stable_hashing_context(&self) -> Self::ContextType {
         (*self).create_stable_hashing_context()
     }
 }
 
 
-impl<'gcx> StableHashingContextProvider for StableHashingContext<'gcx> {
-    type ContextType = StableHashingContext<'gcx>;
+impl<'a, 'gcx> StableHashingContextProvider for StableHashingContext<'a, 'gcx> {
+    type ContextType = StableHashingContext<'a, 'gcx>;
     fn create_stable_hashing_context(&self) -> Self::ContextType {
         self.clone()
     }
 }
 
-impl<'gcx> ::dep_graph::DepGraphSafe for StableHashingContext<'gcx> {
+impl<'a, 'gcx> ::dep_graph::DepGraphSafe for StableHashingContext<'a, 'gcx> {
 }
 
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for hir::BodyId {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for hir::BodyId {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         if hcx.hash_bodies() {
             hcx.body_resolver.body(*self).hash_stable(hcx, hasher);
@@ -221,10 +224,10 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for hir::BodyId {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for hir::HirId {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for hir::HirId {
     #[inline]
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         match hcx.node_id_hashing_mode {
             NodeIdHashingMode::Ignore => {
@@ -243,21 +246,21 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for hir::HirId {
     }
 }
 
-impl<'gcx> ToStableHashKey<StableHashingContext<'gcx>> for hir::HirId {
+impl<'a, 'gcx> ToStableHashKey<StableHashingContext<'a, 'gcx>> for hir::HirId {
     type KeyType = (DefPathHash, hir::ItemLocalId);
 
     #[inline]
     fn to_stable_hash_key(&self,
-                          hcx: &StableHashingContext<'gcx>)
+                          hcx: &StableHashingContext<'a, 'gcx>)
                           -> (DefPathHash, hir::ItemLocalId) {
         let def_path_hash = hcx.local_def_path_hash(self.owner);
         (def_path_hash, self.local_id)
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for ast::NodeId {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for ast::NodeId {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         match hcx.node_id_hashing_mode {
             NodeIdHashingMode::Ignore => {
@@ -270,18 +273,18 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for ast::NodeId {
     }
 }
 
-impl<'gcx> ToStableHashKey<StableHashingContext<'gcx>> for ast::NodeId {
+impl<'a, 'gcx> ToStableHashKey<StableHashingContext<'a, 'gcx>> for ast::NodeId {
     type KeyType = (DefPathHash, hir::ItemLocalId);
 
     #[inline]
     fn to_stable_hash_key(&self,
-                          hcx: &StableHashingContext<'gcx>)
+                          hcx: &StableHashingContext<'a, 'gcx>)
                           -> (DefPathHash, hir::ItemLocalId) {
         hcx.definitions.node_to_hir_id(*self).to_stable_hash_key(hcx)
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for Span {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for Span {
 
     // Hash a span in a stable way. We can't directly hash the span's BytePos
     // fields (that would be similar to hashing pointers, since those are just
@@ -293,7 +296,7 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for Span {
     // Also, hashing filenames is expensive so we avoid doing it twice when the
     // span starts and ends in the same file, which is almost always the case.
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         const TAG_VALID_SPAN: u8 = 0;
         const TAG_INVALID_SPAN: u8 = 1;
@@ -373,8 +376,8 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for Span {
     }
 }
 
-pub fn hash_stable_trait_impls<'gcx, W, R>(
-    hcx: &mut StableHashingContext<'gcx>,
+pub fn hash_stable_trait_impls<'a, 'gcx, W, R>(
+    hcx: &mut StableHashingContext<'a, 'gcx>,
     hasher: &mut StableHasher<W>,
     blanket_impls: &Vec<DefId>,
     non_blanket_impls: &HashMap<fast_reject::SimplifiedType, Vec<DefId>, R>)

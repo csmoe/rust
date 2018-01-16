@@ -186,9 +186,9 @@ pub(super) fn trait_impls_of_provider<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     })
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for TraitImpls {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for TraitImpls {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a, 'gcx>,
                                           hasher: &mut StableHasher<W>) {
         let TraitImpls {
             ref blanket_impls,

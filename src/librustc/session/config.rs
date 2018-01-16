@@ -123,10 +123,10 @@ impl_stable_hash_for!(enum self::OutputType {
     DepInfo
 });
 
-impl<'tcx> ToStableHashKey<StableHashingContext<'tcx>> for OutputType {
+impl<'a, 'tcx> ToStableHashKey<StableHashingContext<'a, 'tcx>> for OutputType {
     type KeyType = OutputType;
     #[inline]
-    fn to_stable_hash_key(&self, _: &StableHashingContext<'tcx>) -> Self::KeyType {
+    fn to_stable_hash_key(&self, _: &StableHashingContext<'a, 'tcx>) -> Self::KeyType {
         *self
     }
 }
