@@ -48,12 +48,7 @@ pub trait MonoItemExt<'a, 'tcx>: fmt::Debug + BaseMonoItemExt<'a, 'tcx> {
                 let tcx = cx.tcx;
                 let item = tcx.hir.expect_item(node_id);
                 if let hir::ItemStatic(_, m, _) = item.node {
-                    match consts::trans_static(&cx, m, item.id, &item.attrs) {
-                        Ok(_) => { /* Cool, everything's alright. */ },
-                        Err(err) => {
-                            err.report(tcx, item.span, "static");
-                        }
-                    };
+                    consts::trans_static(&cx, m, item.id, &item.attrs);
                 } else {
                     span_bug!(item.span, "Mismatch between hir::Item type and TransItem type")
                 }

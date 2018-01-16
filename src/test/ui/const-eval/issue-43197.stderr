@@ -1,14 +1,50 @@
 error[E0080]: constant evaluation error
-  --> $DIR/issue-43197.rs:18:20
+  --> $DIR/issue-43197.rs:20:23
    |
-18 |     const X: u32 = 0-1; //~ ERROR constant evaluation error
-   |                    ^^^ attempt to subtract with overflow
+20 |     println!("{} {}", X, Y);
+   |                       ^ attempt to subtract with overflow
+   |
+note: inside call to main
+  --> $DIR/issue-43197.rs:20:23
+   |
+20 |     println!("{} {}", X, Y);
+   |                       ^
+
+error[E0080]: constant evaluation error
+  --> $DIR/issue-43197.rs:20:26
+   |
+20 |     println!("{} {}", X, Y);
+   |                          ^ attempt to subtract with overflow
+   |
+note: inside call to main
+  --> $DIR/issue-43197.rs:20:26
+   |
+20 |     println!("{} {}", X, Y);
+   |                          ^
 
 error[E0080]: constant evaluation error
   --> $DIR/issue-43197.rs:19:24
    |
 19 |     const Y: u32 = foo(0-1); //~ ERROR constant evaluation error
    |                        ^^^ attempt to subtract with overflow
+   |
+note: inside call to main::Y
+  --> $DIR/issue-43197.rs:19:5
+   |
+19 |     const Y: u32 = foo(0-1); //~ ERROR constant evaluation error
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to 2 previous errors
+error[E0080]: constant evaluation error
+  --> $DIR/issue-43197.rs:18:20
+   |
+18 |     const X: u32 = 0-1; //~ ERROR constant evaluation error
+   |                    ^^^ attempt to subtract with overflow
+   |
+note: inside call to main::X
+  --> $DIR/issue-43197.rs:18:5
+   |
+18 |     const X: u32 = 0-1; //~ ERROR constant evaluation error
+   |     ^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 4 previous errors
 

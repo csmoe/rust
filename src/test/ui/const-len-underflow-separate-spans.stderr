@@ -1,8 +1,20 @@
 error[E0080]: constant evaluation error
-  --> $DIR/const-len-underflow-separate-spans.rs:20:17
+  --> $DIR/const-len-underflow-separate-spans.rs:17:20
    |
-20 |     let a: [i8; LEN] = unimplemented!();
-   |                 ^^^ miri failed: Overflow(Sub) at $DIR/const-len-underflow-separate-spans.rs:17:20: 17:29
+17 | const LEN: usize = ONE - TWO;
+   |                    ^^^^^^^^^ attempt to subtract with overflow
+   |
+note: inside call to LEN
+  --> $DIR/const-len-underflow-separate-spans.rs:17:1
+   |
+17 | const LEN: usize = ONE - TWO;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-error: aborting due to previous error
+error[E0080]: constant evaluation error
+  --> $DIR/const-len-underflow-separate-spans.rs:21:17
+   |
+21 |     let a: [i8; LEN] = unimplemented!();
+   |                 ^^^ miri failed: attempt to subtract with overflow
+
+error: aborting due to 2 previous errors
 

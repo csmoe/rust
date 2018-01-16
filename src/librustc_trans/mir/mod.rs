@@ -42,6 +42,8 @@ use self::operand::{OperandRef, OperandValue};
 
 /// Master context for translating MIR.
 pub struct FunctionCx<'a, 'tcx:'a> {
+    instance: Instance<'tcx>,
+
     mir: &'a mir::Mir<'tcx>,
 
     debug_context: debuginfo::FunctionDebugContext,
@@ -225,6 +227,7 @@ pub fn trans_mir<'a, 'tcx: 'a>(
     let (landing_pads, funclets) = create_funclets(&bx, &cleanup_kinds, &block_bxs);
 
     let mut fx = FunctionCx {
+        instance,
         mir,
         llfn,
         fn_ty,

@@ -135,8 +135,18 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                     span_err!(self.tcx.sess, span, E0158,
                               "statics cannot be referenced in patterns");
                 }
-                PatternError::ConstEval(ref err) => {
-                    err.report(self.tcx, pat_span, "pattern");
+                PatternError::FloatBug => {
+                    // FIXME(#31407) this is only necessary because float parsing is buggy
+                    ::rustc::middle::const_val::struct_error(
+                        self.tcx, pat_span,
+                        "could not evaluate float literal (see issue #31407)",
+                    ).emit();
+                }
+                PatternError::NonConstPath(span) => {
+                    ::rustc::middle::const_val::struct_error(
+                        self.tcx, span,
+                        "runtime values cannot be referenced in patterns",
+                    ).emit();
                 }
             }
         }

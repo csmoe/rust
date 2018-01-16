@@ -2446,7 +2446,11 @@ impl Clean<Type> for hir::Ty {
                 let def_id = cx.tcx.hir.body_owner_def_id(n);
                 let param_env = cx.tcx.param_env(def_id);
                 let substs = Substs::identity_for_item(cx.tcx, def_id);
-                let n = cx.tcx.const_eval(param_env.and((def_id, substs))).unwrap();
+                let cid = GlobalId {
+                    instance: ty::Instance::new(def_id, substs),
+                    promoted: None
+                };
+                let n = cx.tcx.const_eval(param_env.and(cid)).unwrap();
                 let n = if let ConstVal::Unevaluated(def_id, _) = n.val {
                     if let Some(node_id) = cx.tcx.hir.as_local_node_id(def_id) {
                         print_const_expr(cx, cx.tcx.hir.body_owned_by(node_id))
@@ -2574,7 +2578,11 @@ impl<'tcx> Clean<Type> for Ty<'tcx> {
                 let mut n = cx.tcx.lift(&n).unwrap();
                 if let ConstVal::Unevaluated(def_id, substs) = n.val {
                     let param_env = cx.tcx.param_env(def_id);
-                    n = cx.tcx.const_eval(param_env.and((def_id, substs))).unwrap()
+                    let cid = GlobalId {
+                        instance: ty::Instance::new(def_id, substs),
+                        promoted: None
+                    };
+                    n = cx.tcx.const_eval(param_env.and(cid)).unwrap()
                 };
                 let n = if let ConstVal::Unevaluated(def_id, _) = n.val {
                     if let Some(node_id) = cx.tcx.hir.as_local_node_id(def_id) {
