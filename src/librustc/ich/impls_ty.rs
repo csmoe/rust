@@ -357,12 +357,16 @@ impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for mir::interpret::Al
             .interpret_interner
             .expect("cannot hash AllocIds during HIR lowering")
             .borrow();
-        if let Some(alloc) = interner.get_alloc(*self) {
-            false.hash_stable(hcx, hasher);
-            // FIXME: recursive allocations
+        if let Some(def_id) = interner.get_corresponding_static_def_id(*self) {
+            0.hash_stable(hcx, hasher);
+            // statics are unique via their DefId
+            def_id.hash_stable(hcx, hasher);
+        } else if let Some(alloc) = interner.get_alloc(*self) {
+            // not a static, can't be recursive, hash the allocation
+            1.hash_stable(hcx, hasher);
             alloc.hash_stable(hcx, hasher);
         } else if let Some(inst) = interner.get_fn(*self) {
-            true.hash_stable(hcx, hasher);
+            2.hash_stable(hcx, hasher);
             inst.hash_stable(hcx, hasher);
         } else {
             bug!("no allocation for {}", self);
