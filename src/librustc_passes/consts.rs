@@ -129,6 +129,9 @@ impl<'a, 'gcx> CheckCrateVisitor<'a, 'gcx> {
     }
 
     fn check_const_eval(&self, expr: &'gcx hir::Expr) {
+        if self.tcx.sess.opts.debugging_opts.miri {
+            return;
+        }
         if let Err(err) = self.const_cx().eval(expr) {
             match err.kind {
                 UnimplementedConstVal(_) => {}
@@ -220,28 +223,30 @@ impl<'a, 'tcx> Visitor<'tcx> for CheckCrateVisitor<'a, 'tcx> {
                 self.check_const_eval(lit);
             }
             PatKind::Range(ref start, ref end, RangeEnd::Excluded) => {
-                match self.const_cx().compare_lit_exprs(p.span, start, end) {
-                    Ok(Ordering::Less) => {}
-                    Ok(Ordering::Equal) |
-                    Ok(Ordering::Greater) => {
+                match self.const_cx().compare_lit_exprs(start, end) {
+                    Ok(Some(Ordering::Less)) => {}
+                    Ok(Some(Ordering::Equal)) |
+                    Ok(Some(Ordering::Greater)) => {
                         span_err!(self.tcx.sess,
                                   start.span,
                                   E0579,
                                   "lower range bound must be less than upper");
                     }
+                    Ok(None) => bug!("ranges must be char or int"),
                     Err(ErrorReported) => {}
                 }
             }
             PatKind::Range(ref start, ref end, RangeEnd::Included) => {
-                match self.const_cx().compare_lit_exprs(p.span, start, end) {
-                    Ok(Ordering::Less) |
-                    Ok(Ordering::Equal) => {}
-                    Ok(Ordering::Greater) => {
+                match self.const_cx().compare_lit_exprs(start, end) {
+                    Ok(Some(Ordering::Less)) |
+                    Ok(Some(Ordering::Equal)) => {}
+                    Ok(Some(Ordering::Greater)) => {
                         struct_span_err!(self.tcx.sess, start.span, E0030,
                             "lower range bound must be less than or equal to upper")
                             .span_label(start.span, "lower bound larger than upper bound")
                             .emit();
                     }
+                    Ok(None) => bug!("ranges must be char or int"),
                     Err(ErrorReported) => {}
                 }
             }
@@ -298,7 +303,7 @@ impl<'a, 'tcx> Visitor<'tcx> for CheckCrateVisitor<'a, 'tcx> {
             self.promotable = false;
         }
 
-        if self.in_fn && self.promotable {
+        if self.in_fn && self.promotable && !self.tcx.sess.opts.debugging_opts.miri {
             match self.const_cx().eval(ex) {
                 Ok(_) => {}
                 Err(ConstEvalErr { kind: UnimplementedConstVal(_), .. }) |
