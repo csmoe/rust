@@ -514,7 +514,7 @@ impl<'b, 'a, 'tcx> Visitor<'tcx> for OptimizationFinder<'b, 'a, 'tcx> {
             let place_ty = place
                 .ty(&self.mir.local_decls, self.tcx)
                 .to_ty(self.tcx);
-            let span = self.mir.source_info(location).span;
+            let span = statement.source_info.span;
             if let Some(value) = self.const_prop(rval, place_ty, span) {
                 self.optimizations.const_prop.insert(location, value);
                 if let Place::Local(local) = *place {
