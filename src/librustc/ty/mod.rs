@@ -544,9 +544,9 @@ impl<'tcx> TyS<'tcx> {
     }
 }
 
-impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for ty::TyS<'gcx> {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a>> for ty::TyS<'gcx> {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'a, 'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         let ty::TyS {
             ref sty,
@@ -1395,11 +1395,11 @@ impl<'tcx, T> ParamEnvAnd<'tcx, T> {
     }
 }
 
-impl<'a, 'gcx, T> HashStable<StableHashingContext<'a, 'gcx>> for ParamEnvAnd<'gcx, T>
-    where T: HashStable<StableHashingContext<'a, 'gcx>>
+impl<'a, 'gcx, T> HashStable<StableHashingContext<'a>> for ParamEnvAnd<'gcx, T>
+    where T: HashStable<StableHashingContext<'a>>
 {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'a, 'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         let ParamEnvAnd {
             ref param_env,
@@ -1500,9 +1500,9 @@ impl<'tcx> serialize::UseSpecializedEncodable for &'tcx AdtDef {
 impl<'tcx> serialize::UseSpecializedDecodable for &'tcx AdtDef {}
 
 
-impl<'a, 'gcx> HashStable<StableHashingContext<'a, 'gcx>> for AdtDef {
+impl<'a> HashStable<StableHashingContext<'a>> for AdtDef {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'a, 'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         thread_local! {
             static CACHE: RefCell<FxHashMap<usize, Fingerprint>> =

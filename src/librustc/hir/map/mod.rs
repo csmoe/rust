@@ -1053,7 +1053,7 @@ pub fn map_crate<'hir>(sess: &::session::Session,
                        definitions: &'hir Definitions)
                        -> Map<'hir> {
     let (map, crate_hash) = {
-        let hcx = ::ich::StableHashingContext::new(sess, &forest.krate, definitions, cstore, None);
+        let hcx = ::ich::StableHashingContext::new(sess, &forest.krate, definitions, cstore);
 
         let mut collector = NodeCollector::root(&forest.krate,
                                                 &forest.dep_graph,
