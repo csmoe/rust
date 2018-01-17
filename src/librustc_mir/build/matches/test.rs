@@ -354,15 +354,11 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                     }), val)
                 };
 
-                // Use PartialEq::eq for &str and &[u8] slices, instead of BinOp::Eq.
+                // Use PartialEq::eq for references, instead of BinOp::Eq.
                 let fail = self.cfg.start_new_block();
                 let str_or_bytestr = ty
                     .builtin_deref(true, ty::NoPreference)
-                    .and_then(|tam| match tam.ty.sty {
-                        ty::TyStr => Some(tam.ty),
-                        ty::TySlice(inner) if inner == self.hir.tcx().types.u8 => Some(tam.ty),
-                        _ => None,
-                    });
+                    .map(|tam| tam.ty);
                 if let Some(ty) = str_or_bytestr {
                     let eq_def_id = self.hir.tcx().lang_items().eq_trait().unwrap();
                     let (mty, method) = self.hir.trait_method(eq_def_id, "eq", ty, &[ty]);
