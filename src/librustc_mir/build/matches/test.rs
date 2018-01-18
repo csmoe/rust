@@ -332,9 +332,13 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                                                     Rvalue::Cast(CastKind::Unsize, val, ty));
                             }
                             if opt_ref_test_ty.is_some() {
-                                let array = self.literal_operand(test.span, value.ty, Literal::Value {
-                                    value
-                                });
+                                let array = self.literal_operand(
+                                    test.span,
+                                    value.ty,
+                                    Literal::Value {
+                                        value
+                                    },
+                                );
 
                                 let slice = self.temp(ty, test.span);
                                 self.cfg.push_assign(block, source_info, &slice,
