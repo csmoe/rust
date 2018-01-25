@@ -1509,11 +1509,12 @@ impl<'a, 'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> EvalContext<'a, 'mir, 'tcx, M
                 write!(msg, ":").unwrap();
 
                 match self.stack[frame].get_local(local) {
-                    Err(EvalError { kind: EvalErrorKind::DeadLocal, .. }) => {
-                        write!(msg, " is dead").unwrap();
-                    }
                     Err(err) => {
-                        panic!("Failed to access local: {:?}", err);
+                        if let EvalErrorKind::DeadLocal = *err.kind {
+                            write!(msg, " is dead").unwrap();
+                        } else {
+                            panic!("Failed to access local: {:?}", err);
+                        }
                     }
                     Ok(Value::ByRef(ptr, align)) => {
                         match ptr.into_inner_primval() {
@@ -1572,7 +1573,7 @@ impl<'a, 'mir, 'tcx: 'mir, M: Machine<'mir, 'tcx>> EvalContext<'a, 'mir, 'tcx, M
     }
 
     pub fn report(&self, e: &mut EvalError, as_err: bool, explicit_span: Option<Span>) {
-        if let EvalErrorKind::TypeckError = e.kind {
+        if let EvalErrorKind::TypeckError = *e.kind {
             return;
         }
         if let Some(ref mut backtrace) = e.backtrace {
