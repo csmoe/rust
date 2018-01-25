@@ -1092,7 +1092,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     /// Allocates a byte or string literal for `mir::interpret`
     pub fn allocate_cached(self, bytes: &[u8]) -> interpret::AllocId {
         // check whether we already allocated this literal or a constant with the same memory
-        if let Some(&alloc_id) = self.interpret_interner.inner.borrow().literal_alloc_cache.get(bytes) {
+        if let Some(&alloc_id) = self.interpret_interner.inner.borrow()
+                                     .literal_alloc_cache.get(bytes) {
             return alloc_id;
         }
         // create an allocation that just contains these bytes
