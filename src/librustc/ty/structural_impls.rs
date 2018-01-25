@@ -612,7 +612,7 @@ impl<'a, 'tcx> Lift<'tcx> for interpret::EvalError<'a> {
     type Lifted = interpret::EvalError<'tcx>;
     fn lift_to_tcx<'b, 'gcx>(&self, tcx: TyCtxt<'b, 'gcx, 'tcx>) -> Option<Self::Lifted> {
         use ::mir::interpret::EvalErrorKind::*;
-        let kind = match self.kind {
+        let kind = match *self.kind {
             MachineError(ref err) => MachineError(err.clone()),
             FunctionPointerTyMismatch(a, b) => FunctionPointerTyMismatch(
                 tcx.lift(&a)?,
@@ -712,7 +712,7 @@ impl<'a, 'tcx> Lift<'tcx> for interpret::EvalError<'a> {
             TypeckError => TypeckError,
         };
         Some(interpret::EvalError {
-            kind,
+            kind: Rc::new(kind),
             backtrace: self.backtrace.clone(),
         })
     }
