@@ -1531,7 +1531,7 @@ impl<'a, 'tcx> LayoutDetails {
                     if variants[i].iter().any(|f| f.abi == Abi::Uninhabited) {
                         continue;
                     }
-                    let x = discr.to_u128_unchecked() as i128;
+                    let x = discr.val as i128;
                     if x < min { min = x; }
                     if x > max { max = x; }
                 }
