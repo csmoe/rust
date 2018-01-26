@@ -81,7 +81,7 @@ pub fn provide(providers: &mut Providers) {
     shim::provide(providers);
     transform::provide(providers);
     providers.const_eval = interpret::const_eval_provider;
-    providers.check_match = pattern::check_match::check_match;
+    providers.check_match = pattern::check_match;
 }
 
 #[cfg(not(stage0))] // remove after the next snapshot
