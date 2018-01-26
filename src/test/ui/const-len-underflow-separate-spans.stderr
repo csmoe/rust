@@ -14,7 +14,7 @@ error[E0080]: constant evaluation error
   --> $DIR/const-len-underflow-separate-spans.rs:21:17
    |
 21 |     let a: [i8; LEN] = unimplemented!();
-   |                 ^^^ miri failed: attempt to subtract with overflow
+   |                 ^^^ attempt to subtract with overflow
 
 error: aborting due to 2 previous errors
 

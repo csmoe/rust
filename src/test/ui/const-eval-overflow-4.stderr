@@ -2,7 +2,7 @@ error[E0080]: constant evaluation error
   --> $DIR/const-eval-overflow-4.rs:23:13
    |
 23 |     : [u32; (i8::MAX as i8 + 1i8) as usize]
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ miri failed: attempt to add with overflow
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ attempt to add with overflow
 
 error: aborting due to previous error
 
