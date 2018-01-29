@@ -36,7 +36,7 @@ use rustc_typeck as typeck;
 use rustc_privacy;
 use rustc_plugin::registry::Registry;
 use rustc_plugin as plugin;
-use rustc_passes::{self, ast_validation, loops, consts, static_recursion, hir_stats};
+use rustc_passes::{self, ast_validation, loops, rvalue_promotion, static_recursion, hir_stats};
 use super::Compilation;
 
 use serialize::json;
@@ -1013,8 +1013,8 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(trans: &TransCrate,
         }
 
         time(time_passes,
-             "const checking",
-             || consts::check_crate(tcx));
+             "rvalue promotion",
+             || rvalue_promotion::check_crate(tcx));
 
         analysis.access_levels =
             time(time_passes, "privacy checking", || rustc_privacy::check_crate(tcx));
