@@ -2452,25 +2452,7 @@ impl Clean<Type> for hir::Ty {
                     promoted: None
                 };
                 let n = cx.tcx.const_eval(param_env.and(cid)).unwrap();
-                let n = match n.val {
-                    ConstVal::Unevaluated(def_id, _) => {
-                        if let Some(node_id) = cx.tcx.hir.as_local_node_id(def_id) {
-                            print_const_expr(cx, cx.tcx.hir.body_owned_by(node_id))
-                        } else {
-                            inline::print_inlined_const(cx, def_id)
-                        }
-                    },
-                    ConstVal::Value(val) => {
-                        let mut s = String::new();
-                        ::rustc::mir::print_miri_value(val, n.ty, &mut s).unwrap();
-                        // array lengths are obviously usize
-                        if s.ends_with("usize") {
-                            let n = s.len() - "usize".len();
-                            s.truncate(n);
-                        }
-                        s
-                    },
-                };
+                let n = print_const(cx, n);
                 Array(box ty.clean(cx), n)
             },
             TyTup(ref tys) => Tuple(tys.clean(cx)),
@@ -2595,25 +2577,7 @@ impl<'tcx> Clean<Type> for Ty<'tcx> {
                     };
                     n = cx.tcx.const_eval(param_env.and(cid)).unwrap()
                 };
-                let n = match n.val {
-                    ConstVal::Unevaluated(def_id, _) => {
-                        if let Some(node_id) = cx.tcx.hir.as_local_node_id(def_id) {
-                            print_const_expr(cx, cx.tcx.hir.body_owned_by(node_id))
-                        } else {
-                            inline::print_inlined_const(cx, def_id)
-                        }
-                    },
-                    ConstVal::Value(val) => {
-                        let mut s = String::new();
-                        ::rustc::mir::print_miri_value(val, n.ty, &mut s).unwrap();
-                        // array lengths are obviously usize
-                        if s.ends_with("usize") {
-                            let n = s.len() - "usize".len();
-                            s.truncate(n);
-                        }
-                        s
-                    },
-                };
+                let n = print_const(cx, n);
                 Array(box ty.clean(cx), n)
             }
             ty::TyRawPtr(mt) => RawPointer(mt.mutbl.clean(cx), box mt.ty.clean(cx)),
@@ -3515,6 +3479,28 @@ fn name_from_pat(p: &hir::Pat) -> String {
             let mid = mid.as_ref().map(|p| format!("..{}", name_from_pat(&**p))).into_iter();
             let end = end.iter().map(|p| name_from_pat(&**p));
             format!("[{}]", begin.chain(mid).chain(end).collect::<Vec<_>>().join(", "))
+        },
+    }
+}
+
+fn print_const(cx: &DocContext, n: &ty::Const) -> String {
+    match n.val {
+        ConstVal::Unevaluated(def_id, _) => {
+            if let Some(node_id) = cx.tcx.hir.as_local_node_id(def_id) {
+                print_const_expr(cx, cx.tcx.hir.body_owned_by(node_id))
+            } else {
+                inline::print_inlined_const(cx, def_id)
+            }
+        },
+        ConstVal::Value(val) => {
+            let mut s = String::new();
+            ::rustc::mir::print_miri_value(val, n.ty, &mut s).unwrap();
+            // array lengths are obviously usize
+            if s.ends_with("usize") {
+                let n = s.len() - "usize".len();
+                s.truncate(n);
+            }
+            s
         },
     }
 }
