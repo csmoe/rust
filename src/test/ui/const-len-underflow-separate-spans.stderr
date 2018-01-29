@@ -3,12 +3,6 @@ error[E0080]: constant evaluation error
    |
 17 | const LEN: usize = ONE - TWO;
    |                    ^^^^^^^^^ attempt to subtract with overflow
-   |
-note: inside call to LEN
-  --> $DIR/const-len-underflow-separate-spans.rs:17:1
-   |
-17 | const LEN: usize = ONE - TWO;
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0080]: constant evaluation error
   --> $DIR/const-len-underflow-separate-spans.rs:21:17

@@ -814,7 +814,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                                 let field = Field::new(i);
                                 let val = match cv.val {
                                     ConstVal::Value(miri) => const_val_field(
-                                        self.tcx, self.param_env, instance,
+                                        self.tcx, self.param_env, instance, span,
                                         Some(variant_index), field, miri, cv.ty,
                                     ).unwrap(),
                                     _ => bug!("{:#?} is not a valid tuple", cv),
@@ -842,7 +842,8 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                         let field = Field::new(i);
                         let val = match cv.val {
                             ConstVal::Value(miri) => const_val_field(
-                                self.tcx, self.param_env, instance, None, field, miri, cv.ty,
+                                self.tcx, self.param_env, instance, span,
+                                None, field, miri, cv.ty,
                             ).unwrap(),
                             _ => bug!("{:#?} is not a valid tuple", cv),
                         };
@@ -859,7 +860,8 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                         let field = Field::new(i);
                         let val = match cv.val {
                             ConstVal::Value(miri) => const_val_field(
-                                self.tcx, self.param_env, instance, None, field, miri, cv.ty,
+                                self.tcx, self.param_env, instance, span,
+                                None, field, miri, cv.ty,
                             ).unwrap(),
                             _ => bug!("{:#?} is not a valid tuple", cv),
                         };
@@ -877,7 +879,8 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                         let field = Field::new(i);
                         let val = match cv.val {
                             ConstVal::Value(miri) => const_val_field(
-                                self.tcx, self.param_env, instance, None, field, miri, cv.ty,
+                                self.tcx, self.param_env, instance, span,
+                                None, field, miri, cv.ty,
                             ).unwrap(),
                             _ => bug!("{:#?} is not a valid tuple", cv),
                         };

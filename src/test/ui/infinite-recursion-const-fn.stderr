@@ -1,8 +1,14 @@
 error[E0080]: constant evaluation error
-  --> $DIR/infinite-recursion-const-fn.rs:16:18
+  --> $DIR/infinite-recursion-const-fn.rs:14:25
+   |
+14 | const fn a() -> usize { b() }
+   |                         ^^^ reached the configured maximum number of stack frames
+   |
+note: for constant expression here
+  --> $DIR/infinite-recursion-const-fn.rs:16:1
    |
 16 | const ARR: [i32; a()] = [5; 6]; //~ ERROR constant evaluation error
-   |                  ^^^ reached the configured maximum number of stack frames
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: aborting due to previous error
 
