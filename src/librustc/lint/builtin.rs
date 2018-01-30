@@ -17,6 +17,12 @@
 use lint::{LintPass, LateLintPass, LintArray};
 
 declare_lint! {
+    pub EXCEEDING_BITSHIFTS,
+    Deny,
+    "shift exceeds the type's number of bits"
+}
+
+declare_lint! {
     pub CONST_ERR,
     Warn,
     "constant evaluation detected erroneous expression"
@@ -246,6 +252,12 @@ declare_lint! {
     "raw pointer to an inference variable"
 }
 
+declare_lint! {
+    pub ILLEGAL_FLOATING_POINT_LITERAL_PATTERN,
+    Warn,
+    "floating-point literals cannot be used in patterns"
+}
+
 /// Does nothing as a lint pass, but registers some `Lint`s
 /// which are used by other parts of the compiler.
 #[derive(Copy, Clone)]
@@ -254,6 +266,8 @@ pub struct HardwiredLints;
 impl LintPass for HardwiredLints {
     fn get_lints(&self) -> LintArray {
         lint_array!(
+            ILLEGAL_FLOATING_POINT_LITERAL_PATTERN,
+            EXCEEDING_BITSHIFTS,
             UNUSED_IMPORTS,
             UNUSED_EXTERN_CRATES,
             UNUSED_QUALIFICATIONS,

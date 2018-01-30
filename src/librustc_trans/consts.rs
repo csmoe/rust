@@ -13,7 +13,6 @@ use llvm::{SetUnnamedAddr};
 use llvm::{ValueRef, True};
 use rustc::hir::def_id::DefId;
 use rustc::hir::map as hir_map;
-use rustc::middle::const_val::ConstEvalErr;
 use debuginfo;
 use base;
 use monomorphize::{MonoItem, MonoItemExt};
@@ -247,13 +246,16 @@ pub fn get_static(cx: &CodegenCx, def_id: DefId) -> ValueRef {
 pub fn trans_static<'a, 'tcx>(cx: &CodegenCx<'a, 'tcx>,
                               m: hir::Mutability,
                               id: ast::NodeId,
-                              attrs: &[ast::Attribute])
-                              -> Result<ValueRef, ConstEvalErr<'tcx>> {
+                              attrs: &[ast::Attribute]) {
     unsafe {
         let def_id = cx.tcx.hir.local_def_id(id);
         let g = get_static(cx, def_id);
 
-        let v = ::mir::trans_static_initializer(cx, def_id)?;
+        let v = match ::mir::trans_static_initializer(cx, def_id) {
+            Ok(v) => v,
+            // Error has already been reported
+            Err(_) => return,
+        };
 
         // boolean SSA values are i1, but they have to be stored in i8 slots,
         // otherwise some LLVM optimization passes don't work as expected
@@ -317,7 +319,5 @@ pub fn trans_static<'a, 'tcx>(cx: &CodegenCx<'a, 'tcx>,
             let cast = llvm::LLVMConstPointerCast(g, Type::i8p(cx).to_ref());
             cx.used_statics.borrow_mut().push(cast);
         }
-
-        Ok(g)
     }
 }

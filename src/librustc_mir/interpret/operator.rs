@@ -8,7 +8,7 @@ use super::{EvalContext, Place, Machine, ValTy};
 
 use rustc::mir::interpret::{EvalResult, PrimVal, PrimValKind, Value, bytes_to_f32, bytes_to_f64};
 
-impl<'a, 'tcx, M: Machine<'tcx>> EvalContext<'a, 'tcx, M> {
+impl<'a, 'mir, 'tcx, M: Machine<'mir, 'tcx>> EvalContext<'a, 'mir, 'tcx, M> {
     fn binop_with_overflow(
         &mut self,
         op: mir::BinOp,
@@ -56,6 +56,24 @@ impl<'a, 'tcx, M: Machine<'tcx>> EvalContext<'a, 'tcx, M> {
 }
 
 macro_rules! overflow {
+    (overflowing_div, $l:expr, $r:expr) => ({
+        let (val, overflowed) = if $r == 0 {
+            ($l, true)
+        } else {
+            $l.overflowing_div($r)
+        };
+        let primval = PrimVal::Bytes(val as u128);
+        Ok((primval, overflowed))
+    });
+    (overflowing_rem, $l:expr, $r:expr) => ({
+        let (val, overflowed) = if $r == 0 {
+            ($l, true)
+        } else {
+            $l.overflowing_rem($r)
+        };
+        let primval = PrimVal::Bytes(val as u128);
+        Ok((primval, overflowed))
+    });
     ($op:ident, $l:expr, $r:expr) => ({
         let (val, overflowed) = $l.$op($r);
         let primval = PrimVal::Bytes(val as u128);
@@ -105,7 +123,7 @@ macro_rules! int_shift {
     })
 }
 
-impl<'a, 'tcx, M: Machine<'tcx>> EvalContext<'a, 'tcx, M> {
+impl<'a, 'mir, 'tcx, M: Machine<'mir, 'tcx>> EvalContext<'a, 'mir, 'tcx, M> {
     /// Returns the result of the specified operation and whether it overflowed.
     pub fn binary_op(
         &self,
@@ -248,10 +266,15 @@ pub fn unary_op<'tcx>(
         (Not, I64) => !(bytes as i64) as u128,
         (Not, I128) => !(bytes as i128) as u128,
 
+        (Neg, I8) if bytes == i8::min_value() as u128 => return err!(OverflowingMath),
         (Neg, I8) => -(bytes as i8) as u128,
+        (Neg, I16) if bytes == i16::min_value() as u128 => return err!(OverflowingMath),
         (Neg, I16) => -(bytes as i16) as u128,
+        (Neg, I32) if bytes == i32::min_value() as u128 => return err!(OverflowingMath),
         (Neg, I32) => -(bytes as i32) as u128,
+        (Neg, I64) if bytes == i64::min_value() as u128 => return err!(OverflowingMath),
         (Neg, I64) => -(bytes as i64) as u128,
+        (Neg, I128) if bytes == i128::min_value() as u128 => return err!(OverflowingMath),
         (Neg, I128) => -(bytes as i128) as u128,
 
         (Neg, F32) => (-bytes_to_f32(bytes)).bits,

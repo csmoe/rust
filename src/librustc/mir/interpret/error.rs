@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::{fmt, env};
+use std::rc::Rc;
 
 use mir;
 use ty::{FnSig, Ty, layout};
@@ -12,9 +13,9 @@ use rustc_const_math::ConstMathErr;
 use syntax::codemap::Span;
 use backtrace::Backtrace;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EvalError<'tcx> {
-    pub kind: EvalErrorKind<'tcx>,
+    pub kind: Rc<EvalErrorKind<'tcx>>,
     pub backtrace: Option<Backtrace>,
 }
 
@@ -25,17 +26,17 @@ impl<'tcx> From<EvalErrorKind<'tcx>> for EvalError<'tcx> {
             _ => None
         };
         EvalError {
-            kind,
+            kind: Rc::new(kind),
             backtrace,
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EvalErrorKind<'tcx> {
     /// This variant is used by machines to signal their own errors that do not
     /// match an existing variant
-    MachineError(Box<Error>),
+    MachineError(String),
     FunctionPointerTyMismatch(FnSig<'tcx>, FnSig<'tcx>),
     NoMirFor(String),
     UnterminatedCString(MemoryPointer),
@@ -131,8 +132,8 @@ pub type EvalResult<'tcx, T = ()> = Result<T, EvalError<'tcx>>;
 impl<'tcx> Error for EvalError<'tcx> {
     fn description(&self) -> &str {
         use self::EvalErrorKind::*;
-        match self.kind {
-            MachineError(ref inner) => inner.description(),
+        match *self.kind {
+            MachineError(ref inner) => inner,
             FunctionPointerTyMismatch(..) =>
                 "tried to call a function through a function pointer of a different type",
             InvalidMemoryAccess =>
@@ -247,20 +248,12 @@ impl<'tcx> Error for EvalError<'tcx> {
                 "encountered constants with type errors, stopping evaluation",
         }
     }
-
-    fn cause(&self) -> Option<&Error> {
-        use self::EvalErrorKind::*;
-        match self.kind {
-            MachineError(ref inner) => Some(&**inner),
-            _ => None,
-        }
-    }
 }
 
 impl<'tcx> fmt::Display for EvalError<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::EvalErrorKind::*;
-        match self.kind {
+        match *self.kind {
             PointerOutOfBounds { ptr, access, allocation_size } => {
                 write!(f, "{} at offset {}, outside bounds of allocation {} which has size {}",
                        if access { "memory access" } else { "pointer computed" },
@@ -294,8 +287,8 @@ impl<'tcx> fmt::Display for EvalError<'tcx> {
                 write!(f, "tried to reallocate memory from {} to {}", old, new),
             DeallocatedWrongMemoryKind(ref old, ref new) =>
                 write!(f, "tried to deallocate {} memory but gave {} as the kind", old, new),
-            Math(span, ref err) =>
-                write!(f, "{:?} at {:?}", err, span),
+            Math(_, ref err) =>
+                write!(f, "{}", err.description()),
             Intrinsic(ref err) =>
                 write!(f, "{}", err),
             InvalidChar(c) =>
@@ -313,7 +306,7 @@ impl<'tcx> fmt::Display for EvalError<'tcx> {
             PathNotFound(ref path) =>
                 write!(f, "Cannot find path {:?}", path),
             MachineError(ref inner) =>
-                write!(f, "machine error: {}", inner),
+                write!(f, "{}", inner),
             IncorrectAllocationInformation(size, size2, align, align2) =>
                 write!(f, "incorrect alloc info: expected size {} and align {}, got size {} and align {}", size, align, size2, align2),
             _ => write!(f, "{}", self.description()),

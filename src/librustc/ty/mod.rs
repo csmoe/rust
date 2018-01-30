@@ -26,12 +26,13 @@ use middle::lang_items::{FnTraitLangItem, FnMutTraitLangItem, FnOnceTraitLangIte
 use middle::privacy::AccessLevels;
 use middle::resolve_lifetime::ObjectLifetimeDefault;
 use mir::Mir;
+use mir::interpret::{GlobalId, Value, PrimVal};
 use mir::GeneratorLayout;
 use session::CrateDisambiguator;
 use traits;
 use ty;
 use ty::subst::{Subst, Substs};
-use ty::util::IntTypeExt;
+use ty::util::{IntTypeExt, Discr};
 use ty::walk::TypeWalker;
 use util::common::ErrorReported;
 use util::nodemap::{NodeSet, DefIdMap, FxHashMap, FxHashSet};
@@ -53,7 +54,6 @@ use syntax::attr;
 use syntax::ext::hygiene::{Mark, SyntaxContext};
 use syntax::symbol::{Symbol, InternedString};
 use syntax_pos::{DUMMY_SP, Span};
-use rustc_const_math::ConstInt;
 
 use rustc_data_structures::accumulate_vec::IntoIter as AccIntoIter;
 use rustc_data_structures::stable_hasher::{StableHasher, StableHasherResult,
@@ -80,7 +80,7 @@ pub use self::binding::BindingMode;
 pub use self::binding::BindingMode::*;
 
 pub use self::context::{TyCtxt, GlobalArenas, AllArenas, tls, keep_local};
-pub use self::context::{Lift, TypeckTables};
+pub use self::context::{Lift, TypeckTables, InterpretInterner};
 
 pub use self::instance::{Instance, InstanceDef};
 
@@ -543,9 +543,9 @@ impl<'tcx> TyS<'tcx> {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for ty::TyS<'gcx> {
+impl<'a, 'gcx> HashStable<StableHashingContext<'a>> for ty::TyS<'gcx> {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         let ty::TyS {
             ref sty,
@@ -1394,11 +1394,11 @@ impl<'tcx, T> ParamEnvAnd<'tcx, T> {
     }
 }
 
-impl<'gcx, T> HashStable<StableHashingContext<'gcx>> for ParamEnvAnd<'gcx, T>
-    where T: HashStable<StableHashingContext<'gcx>>
+impl<'a, 'gcx, T> HashStable<StableHashingContext<'a>> for ParamEnvAnd<'gcx, T>
+    where T: HashStable<StableHashingContext<'a>>
 {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         let ParamEnvAnd {
             ref param_env,
@@ -1499,9 +1499,9 @@ impl<'tcx> serialize::UseSpecializedEncodable for &'tcx AdtDef {
 impl<'tcx> serialize::UseSpecializedDecodable for &'tcx AdtDef {}
 
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for AdtDef {
+impl<'a> HashStable<StableHashingContext<'a>> for AdtDef {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         thread_local! {
             static CACHE: RefCell<FxHashMap<usize, Fingerprint>> =
@@ -1780,24 +1780,36 @@ impl<'a, 'gcx, 'tcx> AdtDef {
 
     #[inline]
     pub fn discriminants(&'a self, tcx: TyCtxt<'a, 'gcx, 'tcx>)
-                         -> impl Iterator<Item=ConstInt> + 'a {
+                         -> impl Iterator<Item=Discr<'tcx>> + 'a {
         let param_env = ParamEnv::empty(traits::Reveal::UserFacing);
         let repr_type = self.repr.discr_type();
         let initial = repr_type.initial_discriminant(tcx.global_tcx());
-        let mut prev_discr = None::<ConstInt>;
+        let mut prev_discr = None::<Discr<'tcx>>;
         self.variants.iter().map(move |v| {
-            let mut discr = prev_discr.map_or(initial, |d| d.wrap_incr());
+            let mut discr = prev_discr.map_or(initial, |d| d.wrap_incr(tcx));
             if let VariantDiscr::Explicit(expr_did) = v.discr {
                 let substs = Substs::identity_for_item(tcx.global_tcx(), expr_did);
-                match tcx.const_eval(param_env.and((expr_did, substs))) {
-                    Ok(&ty::Const { val: ConstVal::Integral(v), .. }) => {
-                        discr = v;
+                let instance = ty::Instance::new(expr_did, substs);
+                let cid = GlobalId {
+                    instance,
+                    promoted: None
+                };
+                match tcx.const_eval(param_env.and(cid)) {
+                    Ok(&ty::Const {
+                        val: ConstVal::Value(Value::ByVal(PrimVal::Bytes(b))),
+                        ..
+                    }) => {
+                        trace!("discriminants: {} ({:?})", b, repr_type);
+                        discr = Discr {
+                            val: b,
+                            ty: repr_type.to_ty(tcx),
+                        };
                     }
-                    err => {
+                    _ => {
                         if !expr_did.is_local() {
                             span_bug!(tcx.def_span(expr_did),
                                 "variant discriminant evaluation succeeded \
-                                 in its crate but failed locally: {:?}", err);
+                                 in its crate but failed locally");
                         }
                     }
                 }
@@ -1816,7 +1828,7 @@ impl<'a, 'gcx, 'tcx> AdtDef {
     pub fn discriminant_for_variant(&self,
                                     tcx: TyCtxt<'a, 'gcx, 'tcx>,
                                     variant_index: usize)
-                                    -> ConstInt {
+                                    -> Discr<'tcx> {
         let param_env = ParamEnv::empty(traits::Reveal::UserFacing);
         let repr_type = self.repr.discr_type();
         let mut explicit_value = repr_type.initial_discriminant(tcx.global_tcx());
@@ -1829,16 +1841,28 @@ impl<'a, 'gcx, 'tcx> AdtDef {
                 }
                 ty::VariantDiscr::Explicit(expr_did) => {
                     let substs = Substs::identity_for_item(tcx.global_tcx(), expr_did);
-                    match tcx.const_eval(param_env.and((expr_did, substs))) {
-                        Ok(&ty::Const { val: ConstVal::Integral(v), .. }) => {
-                            explicit_value = v;
+                    let instance = ty::Instance::new(expr_did, substs);
+                    let cid = GlobalId {
+                        instance,
+                        promoted: None
+                    };
+                    match tcx.const_eval(param_env.and(cid)) {
+                        Ok(&ty::Const {
+                            val: ConstVal::Value(Value::ByVal(PrimVal::Bytes(b))),
+                            ..
+                        }) => {
+                            trace!("discriminants: {} ({:?})", b, repr_type);
+                            explicit_value = Discr {
+                                val: b,
+                                ty: repr_type.to_ty(tcx),
+                            };
                             break;
                         }
-                        err => {
+                        _ => {
                             if !expr_did.is_local() {
                                 span_bug!(tcx.def_span(expr_did),
                                     "variant discriminant evaluation succeeded \
-                                     in its crate but failed locally: {:?}", err);
+                                     in its crate but failed locally");
                             }
                             if explicit_index == 0 {
                                 break;
@@ -1849,18 +1873,7 @@ impl<'a, 'gcx, 'tcx> AdtDef {
                 }
             }
         }
-        let discr = explicit_value.to_u128_unchecked()
-            .wrapping_add((variant_index - explicit_index) as u128);
-        match repr_type {
-            attr::UnsignedInt(ty) => {
-                ConstInt::new_unsigned_truncating(discr, ty,
-                                                  tcx.sess.target.usize_ty)
-            }
-            attr::SignedInt(ty) => {
-                ConstInt::new_signed_truncating(discr as i128, ty,
-                                                tcx.sess.target.isize_ty)
-            }
-        }
+        explicit_value.checked_add(tcx, (variant_index - explicit_index) as u128).0
     }
 
     pub fn destructor(&self, tcx: TyCtxt<'a, 'gcx, 'tcx>) -> Option<Destructor> {

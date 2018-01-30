@@ -342,7 +342,7 @@ impl AddAssign for Size {
 /// Each field is a power of two, giving the alignment a maximum
 /// value of 2<sup>(2<sup>8</sup> - 1)</sup>, which is limited by LLVM to a i32, with
 /// a maximum capacity of 2<sup>31</sup> - 1 or 2147483647.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RustcEncodable, RustcDecodable)]
 pub struct Align {
     abi: u8,
     pref: u8,
@@ -1231,7 +1231,7 @@ impl<'a, 'tcx> LayoutDetails {
                 }
 
                 let element = cx.layout_of(element)?;
-                let count = count.val.to_const_int().unwrap().to_u64().unwrap();
+                let count = count.val.unwrap_u64();
                 let size = element.size.checked_mul(count, dl)
                     .ok_or(LayoutError::SizeOverflow(ty))?;
 
@@ -1531,7 +1531,7 @@ impl<'a, 'tcx> LayoutDetails {
                     if variants[i].iter().any(|f| f.abi == Abi::Uninhabited) {
                         continue;
                     }
-                    let x = discr.to_u128_unchecked() as i128;
+                    let x = discr.val as i128;
                     if x < min { min = x; }
                     if x > max { max = x; }
                 }
@@ -2342,9 +2342,9 @@ impl<'a, 'tcx> TyLayout<'tcx> {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for Variants {
+impl<'a> HashStable<StableHashingContext<'a>> for Variants {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         use ty::layout::Variants::*;
         mem::discriminant(self).hash_stable(hcx, hasher);
@@ -2378,9 +2378,9 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for Variants {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for FieldPlacement {
+impl<'a> HashStable<StableHashingContext<'a>> for FieldPlacement {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         use ty::layout::FieldPlacement::*;
         mem::discriminant(self).hash_stable(hcx, hasher);
@@ -2401,9 +2401,9 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for FieldPlacement {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for Abi {
+impl<'a> HashStable<StableHashingContext<'a>> for Abi {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         use ty::layout::Abi::*;
         mem::discriminant(self).hash_stable(hcx, hasher);
@@ -2428,9 +2428,9 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for Abi {
     }
 }
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for Scalar {
+impl<'a> HashStable<StableHashingContext<'a>> for Scalar {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         let Scalar { value, valid_range: RangeInclusive { start, end } } = *self;
         value.hash_stable(hcx, hasher);
@@ -2471,10 +2471,10 @@ impl_stable_hash_for!(struct ::ty::layout::Size {
     raw
 });
 
-impl<'gcx> HashStable<StableHashingContext<'gcx>> for LayoutError<'gcx>
+impl<'a, 'gcx> HashStable<StableHashingContext<'a>> for LayoutError<'gcx>
 {
     fn hash_stable<W: StableHasherResult>(&self,
-                                          hcx: &mut StableHashingContext<'gcx>,
+                                          hcx: &mut StableHashingContext<'a>,
                                           hasher: &mut StableHasher<W>) {
         use ty::layout::LayoutError::*;
         mem::discriminant(self).hash_stable(hcx, hasher);

@@ -36,9 +36,9 @@ use rustc::ty::{ToPredicate, ReprOptions};
 use rustc::ty::{self, AdtKind, ToPolyTraitRef, Ty, TyCtxt};
 use rustc::ty::maps::Providers;
 use rustc::ty::util::IntTypeExt;
+use rustc::mir::interpret::{GlobalId, Value, PrimVal};
+use rustc::ty::util::Discr;
 use util::nodemap::FxHashMap;
-
-use rustc_const_math::ConstInt;
 
 use syntax::{abi, ast};
 use syntax::codemap::Spanned;
@@ -517,15 +517,20 @@ fn convert_enum_variant_types<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     let def = tcx.adt_def(def_id);
     let repr_type = def.repr.discr_type();
     let initial = repr_type.initial_discriminant(tcx);
-    let mut prev_discr = None::<ConstInt>;
+    let mut prev_discr = None::<Discr<'tcx>>;
 
     // fill the discriminant values and field types
     for variant in variants {
-        let wrapped_discr = prev_discr.map_or(initial, |d| d.wrap_incr());
+        let wrapped_discr = prev_discr.map_or(initial, |d| d.wrap_incr(tcx));
         prev_discr = Some(if let Some(e) = variant.node.disr_expr {
             let expr_did = tcx.hir.local_def_id(e.node_id);
             let substs = Substs::identity_for_item(tcx, expr_did);
-            let result = tcx.at(variant.span).const_eval(param_env.and((expr_did, substs)));
+            let instance = ty::Instance::new(expr_did, substs);
+            let global_id = GlobalId {
+                instance,
+                promoted: None
+            };
+            let result = tcx.at(variant.span).const_eval(param_env.and(global_id));
 
             // enum variant evaluation happens before the global constant check
             // so we need to report the real error
@@ -534,7 +539,16 @@ fn convert_enum_variant_types<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
             }
 
             match result {
-                Ok(&ty::Const { val: ConstVal::Integral(x), .. }) => Some(x),
+                // FIXME: just use `to_raw_bits` here?
+                Ok(&ty::Const {
+                    val: ConstVal::Value(Value::ByVal(PrimVal::Bytes(b))),
+                    ..
+                }) => {
+                    Some(Discr {
+                        val: b,
+                        ty: initial.ty,
+                    })
+                }
                 _ => None
             }
         } else if let Some(discr) = repr_type.disr_incr(tcx, prev_discr) {
