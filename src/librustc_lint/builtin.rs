@@ -1587,6 +1587,7 @@ fn check_const(cx: &LateContext, body_id: hir::BodyId, what: &str) {
             cx.tcx.at(span),
             &format!("this {} cannot be used", what),
             cx.current_lint_root(),
+            None,
         );
     }
 }

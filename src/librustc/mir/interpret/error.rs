@@ -1,22 +1,21 @@
-use std::{fmt, env};
+use std::{env, fmt};
 
 use mir;
-use ty::{FnSig, Ty, layout};
-use ty::layout::{Size, Align};
 use rustc_data_structures::sync::Lrc;
+use ty::layout::{Align, Size};
+use ty::{layout, FnSig, Ty};
 
-use super::{
-    Pointer, Lock, AccessKind
-};
+use super::{AccessKind, Lock, Pointer};
 
 use backtrace::Backtrace;
 
+use errors::DiagnosticBuilder;
 use ty;
 use ty::query::TyCtxtAt;
-use errors::DiagnosticBuilder;
 
-use syntax_pos::Span;
+use lint::LintId;
 use syntax::ast;
+use syntax_pos::Span;
 
 pub type ConstEvalResult<'tcx> = Result<&'tcx ty::Const<'tcx>, Lrc<ConstEvalErr<'tcx>>>;
 
@@ -35,34 +34,29 @@ pub struct FrameInfo {
 }
 
 impl<'a, 'gcx, 'tcx> ConstEvalErr<'tcx> {
-    pub fn struct_error(&self,
+    pub fn struct_error(
+        &self,
         tcx: TyCtxtAt<'a, 'gcx, 'tcx>,
-        message: &str)
-        -> Option<DiagnosticBuilder<'tcx>>
-    {
-        self.struct_generic(tcx, message, None)
+        message: &str,
+    ) -> Option<DiagnosticBuilder<'tcx>> {
+        self.struct_generic(tcx, message, None, None)
     }
 
-    pub fn report_as_error(&self,
-        tcx: TyCtxtAt<'a, 'gcx, 'tcx>,
-        message: &str
-    ) {
-        let err = self.struct_generic(tcx, message, None);
+    pub fn report_as_error(&self, tcx: TyCtxtAt<'a, 'gcx, 'tcx>, message: &str) {
+        let err = self.struct_generic(tcx, message, None, None);
         if let Some(mut err) = err {
             err.emit();
         }
     }
 
-    pub fn report_as_lint(&self,
+    pub fn report_as_lint(
+        &self,
         tcx: TyCtxtAt<'a, 'gcx, 'tcx>,
         message: &str,
         lint_root: ast::NodeId,
+        lint_id: Option<lint::LintId>,
     ) {
-        let lint = self.struct_generic(
-            tcx,
-            message,
-            Some(lint_root),
-        );
+        let lint = self.struct_generic(tcx, message, Some(lint_root), lint_id);
         if let Some(mut lint) = lint {
             lint.emit();
         }
@@ -73,31 +67,40 @@ impl<'a, 'gcx, 'tcx> ConstEvalErr<'tcx> {
         tcx: TyCtxtAt<'a, 'gcx, 'tcx>,
         message: &str,
         lint_root: Option<ast::NodeId>,
+        lint_id: Option<lint::LintId>,
     ) -> Option<DiagnosticBuilder<'tcx>> {
         match self.error.kind {
-            ::mir::interpret::EvalErrorKind::TypeckError |
-            ::mir::interpret::EvalErrorKind::TooGeneric |
-            ::mir::interpret::EvalErrorKind::CheckMatchError |
-            ::mir::interpret::EvalErrorKind::Layout(_) => return None,
+            ::mir::interpret::EvalErrorKind::TypeckError
+            | ::mir::interpret::EvalErrorKind::TooGeneric
+            | ::mir::interpret::EvalErrorKind::CheckMatchError
+            | ::mir::interpret::EvalErrorKind::Layout(_) => return None,
             ::mir::interpret::EvalErrorKind::ReferencedConstant(ref inner) => {
-                inner.struct_generic(tcx, "referenced constant has errors", lint_root)?.emit();
-            },
-            _ => {},
+                inner
+                    .struct_generic(tcx, "referenced constant has errors", lint_root)?
+                    .emit();
+            }
+            _ => {}
         }
         trace!("reporting const eval failure at {:?}", self.span);
         let mut err = if let Some(lint_root) = lint_root {
-            let node_id = self.stacktrace
+            let node_id = self
+                .stacktrace
                 .iter()
                 .rev()
                 .filter_map(|frame| frame.lint_root)
                 .next()
                 .unwrap_or(lint_root);
-            tcx.struct_span_lint_node(
-                ::rustc::lint::builtin::CONST_ERR,
-                node_id,
-                tcx.span,
-                message,
-            )
+            let const_err_lint = ::rustc::lint::builtin::CONST_ERR;
+            let const_time_limit_lint = ::rustc::lint::builtin::CONST_TIME_LIMIT;
+
+            match lint_id {
+                Some(LintId::of(const_time_limit_lint)) => {
+                    tcx.struct_span_lint_node(const_time_limit_lint, node_id, tcx.span, message)
+                }
+                _ => {
+                    tcx.struct_span_lint_node(const_err_lint, node_id, tcx.span, message)
+                }
+            }
         } else {
             struct_error(tcx, message)
         };
@@ -129,7 +132,11 @@ impl<'tcx> From<EvalErrorKind<'tcx, u64>> for EvalError<'tcx> {
 
                 use std::fmt::Write;
                 let mut trace_text = "\n\nAn error occurred in miri:\n".to_string();
-                write!(trace_text, "backtrace frames: {}\n", backtrace.frames().len()).unwrap();
+                write!(
+                    trace_text,
+                    "backtrace frames: {}\n",
+                    backtrace.frames().len()
+                ).unwrap();
                 'frames: for (i, frame) in backtrace.frames().iter().enumerate() {
                     if frame.symbols().is_empty() {
                         write!(trace_text, "{}: no symbols\n", i).unwrap();
@@ -155,12 +162,10 @@ impl<'tcx> From<EvalErrorKind<'tcx, u64>> for EvalError<'tcx> {
                     }
                 }
                 error!("{}", trace_text);
-            },
-            _ => {},
+            }
+            _ => {}
         }
-        EvalError {
-            kind,
-        }
+        EvalError { kind }
     }
 }
 
@@ -196,7 +201,10 @@ pub enum EvalErrorKind<'tcx, O> {
     Unimplemented(String),
     DerefFunctionPointer,
     ExecuteMemory,
-    BoundsCheck { len: O, index: O },
+    BoundsCheck {
+        len: O,
+        index: O,
+    },
     Overflow(mir::BinOp),
     OverflowNeg,
     DivisionByZero,

@@ -155,6 +155,7 @@ impl<'b, 'a, 'tcx:'b> ConstPropagator<'b, 'a, 'tcx> {
                     self.ecx.tcx,
                     "this expression will panic at runtime",
                     lint_root,
+                    None,
                 );
                 None
             },

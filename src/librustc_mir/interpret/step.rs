@@ -2,18 +2,36 @@
 //!
 //! The main entry point is the `step` method.
 
+use rustc::lint;
 use rustc::mir;
 
+use super::{ConstEvalErr, EvalContext, Machine, MAX_TERMINATORS};
 use rustc::mir::interpret::EvalResult;
-use super::{EvalContext, Machine};
 
 impl<'a, 'mir, 'tcx, M: Machine<'mir, 'tcx>> EvalContext<'a, 'mir, 'tcx, M> {
     pub fn inc_step_counter_and_check_limit(&mut self, n: usize) {
         self.terminators_remaining = self.terminators_remaining.saturating_sub(n);
         if self.terminators_remaining == 0 {
-            // FIXME(#49980): make this warning a lint
-            self.tcx.sess.span_warn(self.frame().span, "Constant evaluating a complex constant, this might take some time");
-            self.terminators_remaining = 1_000_000;
+            let msg = "constant evaluating a complex constant, this might take some time";
+            let const_time_lint = lint::builtin::CONST_TIME_LIMIT;
+            let lint_id = lint::LinId::of(const_time_lint);
+            let err = ConstEvalErr::struct_error(self.tcx, msg);
+
+            let node_id = self
+                .stacktrace
+                .iter()
+                .rev()
+                .filter_map(|frame| frame.lint_root)
+                .next()
+                .expect("some part of a failing const eval must be local");
+            if self.lint_level_at_node(lint, node_id).0 == lint::Level::Deny
+                || self.lint_level_at_node(lint, node_id).0 == lint::Level::Forbid
+            {
+                err.report_as_err(self.tcx, msg);
+            } else {
+                err.report_as_lint(self.tcx, msg, node_id, Some(lint_id));
+            }
+            self.terminators_remaining = MAX_TERMINATORS;
         }
     }
 
