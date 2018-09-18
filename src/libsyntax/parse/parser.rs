@@ -47,7 +47,11 @@ use syntax_pos::{self, Span, MultiSpan, BytePos, FileName, edition::Edition};
 use errors::{self, Applicability, DiagnosticBuilder, DiagnosticId};
 use parse::{self, SeqSep, classify, token};
 use parse::lexer::TokenAndSpan;
-use parse::lexer::comments::{doc_comment_style, strip_doc_comment_decoration};
+use parse::lexer::comments::{
+    doc_comment_style,
+    strip_doc_comment_decoration,
+    is_doc_comment,
+};
 use parse::{new_sub_parser_from_file, ParseSess, Directory, DirectoryOwnership};
 use util::parser::{AssocOp, Fixity};
 use print::pprust;
@@ -732,6 +736,15 @@ impl<'a> Parser<'a> {
                   format!("expected {} here", expect)))
             };
             let mut err = self.fatal(&msg_exp);
+            if is_doc_comment(&actual) {
+                err.span_note(
+                    self.span,
+                    &format!(
+                        "documentation comments are illegal here, see {}",
+                        "https://doc.rust-lang.org/reference/comments.html"
+                    ),
+                );
+            }
             if self.token.is_ident_named("and") {
                 err.span_suggestion_short_with_applicability(
                     self.span,
