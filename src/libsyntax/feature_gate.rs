@@ -570,6 +570,9 @@ declare_features! (
     // Allows explicit discriminants on non-unit enum variants.
     (active, arbitrary_enum_discriminant, "1.37.0", Some(60553), None),
 
+    // Allows `..` syntax in pattern.
+    (active, dotdot_pattern, "1.37.0", Some(62254), None),
+
     // -------------------------------------------------------------------------
     // feature-group-end: actual feature gates
     // -------------------------------------------------------------------------
