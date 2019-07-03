@@ -7904,3 +7904,18 @@ pub fn emit_unclosed_delims(unclosed_delims: &mut Vec<UnmatchedBrace>, handler: 
     }
     unclosed_delims.clear();
 }
+
+fn check_dotdot_pattern_enabled<'tcx>(tcx: TyCtxt<'tcx>, span: Span) {
+    if !tcx.features().type_alias_enum_variants {
+        let mut err = tcx.sess.struct_span_err(
+            span,
+            "dotdot pattern is experimental"
+        );
+        if nightly_options::is_nightly_build() {
+            help!(&mut err,
+                "add `#![feature(dotdot_pattern)]` to the \
+                crate attributes to enable");
+        }
+        err.emit();
+    }
+}
