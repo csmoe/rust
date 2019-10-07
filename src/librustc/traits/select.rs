@@ -3064,7 +3064,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 obligation.recursion_depth + 1,
                 obligation.param_env,
                 trait_def_id,
-                &trait_ref.substs,
+                trait_ref.substs,
             )
         });
 
@@ -3121,7 +3121,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             recursion_depth,
             param_env,
             impl_def_id,
-            &substs.value,
+            substs.value,
         );
 
         debug!(

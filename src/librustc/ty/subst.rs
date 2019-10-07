@@ -178,10 +178,39 @@ impl<'tcx> Decodable for GenericArg<'tcx> {
     }
 }
 
-/// A substitution mapping generic parameters to new values.
 pub type InternalSubsts<'tcx> = List<GenericArg<'tcx>>;
 
-pub type SubstsRef<'tcx> = &'tcx InternalSubsts<'tcx>;
+/// A substitution mapping generic parameters to new values.
+#[derive(Clone, Copy, Debug, Hash, RustcEncodable, RustcDecodable,
+    PartialEq, Eq, PartialOrd, Ord, HashStable)]
+pub struct SubstsRef<'tcx> {
+    inner: &'tcx InternalSubsts<'tcx>,
+}
+
+impl<'tcx> IntoIterator for SubstsRef<'tcx> {
+    type Item = &'tcx GenericArg<'tcx>;
+    type IntoIter = <&'tcx InternalSubsts<'tcx> as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+BraceStructLiftImpl! {
+    impl<'a, 'tcx> Lift<'tcx> for SubstsRef<'a> {
+        type Lifted = SubstsRef<'tcx>;
+        inner,
+    }
+}
+
+impl std::ops::Deref for SubstsRef<'tcx> {
+    type Target = &'tcx InternalSubsts<'tcx>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target  {
+        self.inner
+    }
+}
+
 
 impl<'a, 'tcx> InternalSubsts<'tcx> {
     /// Interpret these substitutions as the substitutions of a closure type.
@@ -428,14 +457,14 @@ impl<'tcx> rustc_serialize::UseSpecializedDecodable for SubstsRef<'tcx> {}
 // there is more information available (for better errors).
 
 pub trait Subst<'tcx>: Sized {
-    fn subst(&self, tcx: TyCtxt<'tcx>, substs: &[GenericArg<'tcx>]) -> Self {
+    fn subst(&self, tcx: TyCtxt<'tcx>, substs: SubstsRef<'tcx>) -> Self {
         self.subst_spanned(tcx, substs, None)
     }
 
     fn subst_spanned(
         &self,
         tcx: TyCtxt<'tcx>,
-        substs: &[GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
         span: Option<Span>,
     ) -> Self;
 }
@@ -444,7 +473,7 @@ impl<'tcx, T: TypeFoldable<'tcx>> Subst<'tcx> for T {
     fn subst_spanned(
         &self,
         tcx: TyCtxt<'tcx>,
-        substs: &[GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
         span: Option<Span>,
     ) -> T {
         let mut folder = SubstFolder { tcx,
@@ -460,9 +489,9 @@ impl<'tcx, T: TypeFoldable<'tcx>> Subst<'tcx> for T {
 ///////////////////////////////////////////////////////////////////////////
 // The actual substitution engine itself is a type folder.
 
-struct SubstFolder<'a, 'tcx> {
+struct SubstFolder<'tcx> {
     tcx: TyCtxt<'tcx>,
-    substs: &'a [GenericArg<'tcx>],
+    substs: SubstsRef<'tcx>,
 
     /// The location for which the substitution is performed, if available.
     span: Option<Span>,
@@ -477,7 +506,7 @@ struct SubstFolder<'a, 'tcx> {
     binders_passed: u32,
 }
 
-impl<'a, 'tcx> TypeFolder<'tcx> for SubstFolder<'a, 'tcx> {
+impl<'tcx> TypeFolder<'tcx> for SubstFolder<'tcx> {
     fn tcx<'b>(&'b self) -> TyCtxt<'tcx> { self.tcx }
 
     fn fold_binder<T: TypeFoldable<'tcx>>(&mut self, t: &ty::Binder<T>) -> ty::Binder<T> {
@@ -561,7 +590,7 @@ impl<'a, 'tcx> TypeFolder<'tcx> for SubstFolder<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> SubstFolder<'a, 'tcx> {
+impl<'tcx> SubstFolder<'tcx> {
     fn ty_for_param(&self, p: ty::ParamTy, source_ty: Ty<'tcx>) -> Ty<'tcx> {
         // Look up the type in the substitutions. It really should be in there.
         let opt_ty = self.substs.get(p.index as usize).map(|k| k.unpack());

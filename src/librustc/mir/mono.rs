@@ -169,13 +169,13 @@ impl<'tcx> MonoItem<'tcx> {
     pub fn is_instantiable(&self, tcx: TyCtxt<'tcx>) -> bool {
         debug!("is_instantiable({:?})", self);
         let (def_id, substs) = match *self {
-            MonoItem::Fn(ref instance) => (instance.def_id(), instance.substs),
+            MonoItem::Fn(ref instance) => (instance.def_id(), instance.substs[..]),
             MonoItem::Static(def_id) => (def_id, InternalSubsts::empty()),
             // global asm never has predicates
             MonoItem::GlobalAsm(..) => return true
         };
 
-        tcx.substitute_normalize_and_test_predicates((def_id, &substs))
+        tcx.substitute_normalize_and_test_predicates((def_id, substs))
     }
 
     pub fn to_string(&self, tcx: TyCtxt<'tcx>, debug: bool) -> String {

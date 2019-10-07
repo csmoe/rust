@@ -81,7 +81,7 @@ pub fn translate_substs<'a, 'tcx>(
     let source_trait_ref = infcx.tcx
                                 .impl_trait_ref(source_impl)
                                 .unwrap()
-                                .subst(infcx.tcx, &source_substs);
+                                .subst(infcx.tcx, source_substs);
 
     // translate the Self and Param parts of the substitution, since those
     // vary across impls

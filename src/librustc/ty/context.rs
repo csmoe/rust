@@ -2625,11 +2625,11 @@ impl<'tcx> TyCtxt<'tcx> {
         }
     }
 
-    pub fn intern_substs(self, ts: &[GenericArg<'tcx>]) -> &'tcx List<GenericArg<'tcx>> {
+    pub fn intern_substs(self, ts: &[GenericArg<'tcx>]) -> SubstsRef<'tcx> {
         if ts.len() == 0 {
-            List::empty()
+            SubstsRef { inner: List::empty() }
         } else {
-            self._intern_substs(ts)
+            SubstsRef { inner: self._intern_substs(ts) }
         }
     }
 
@@ -2699,13 +2699,13 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn mk_substs<I: InternAs<[GenericArg<'tcx>],
-                     &'tcx List<GenericArg<'tcx>>>>(self, iter: I) -> I::Output {
+                     SubstsRef<'tcx>>>(self, iter: I) -> I::Output {
         iter.intern_with(|xs| self.intern_substs(xs))
     }
 
     pub fn mk_substs_trait(self,
                      self_ty: Ty<'tcx>,
-                     rest: &[GenericArg<'tcx>])
+                     rest: SubstsRef<'tcx>)
                     -> SubstsRef<'tcx>
     {
         self.mk_substs(iter::once(self_ty.into()).chain(rest.iter().cloned()))

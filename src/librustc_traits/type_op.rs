@@ -98,7 +98,7 @@ impl AscribeUserTypeCx<'me, 'tcx> {
         self.infcx.tcx
     }
 
-    fn subst<T>(&self, value: T, substs: &[GenericArg<'tcx>]) -> T
+    fn subst<T>(&self, value: T, substs: SubstsRef<'tcx>) -> T
     where
         T: TypeFoldable<'tcx>,
     {
