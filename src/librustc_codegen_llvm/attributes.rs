@@ -256,8 +256,8 @@ pub fn from_fn_attrs(cx: &CodegenCx<'ll, 'tcx>, llfn: &'ll Value, instance: ty::
     match codegen_fn_attrs.inline {
         attributes::InlineAttr::Hint | attributes::InlineAttr::Always => {
             if cx.tcx.sess.opts.debugging_opts.print_inline_times {
-                let function = cx.tcx.def_path_str_with_substs(instance.def_id(), instance.substs);
-                self.tcx.sess.code_stats.record_function_inline_times(function);
+                let function = tcx.symbol_name(instance).name.as_str();
+                cx.tcx.sess.code_stats.record_function_inline_times(function);
             }
         }
         _ => ()
