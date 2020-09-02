@@ -395,9 +395,6 @@ pub fn run_compiler(
             if sess.opts.debugging_opts.print_type_sizes {
                 sess.code_stats.print_type_sizes();
             }
-            if sess.opts.debugging_opts.print_inline_times {
-                sess.code_stats.print_inline_times();
-            }
 
             let linker = queries.linker()?;
             Ok(Some(linker))
@@ -411,7 +408,9 @@ pub fn run_compiler(
         if sess.opts.debugging_opts.perf_stats {
             sess.print_perf_stats();
         }
-
+        if sess.opts.debugging_opts.print_inline_times {
+            sess.code_stats.print_inline_times();
+        }
         if sess.print_fuel_crate.is_some() {
             eprintln!(
                 "Fuel used by {}: {}",
