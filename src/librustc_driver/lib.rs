@@ -395,6 +395,9 @@ pub fn run_compiler(
             if sess.opts.debugging_opts.print_type_sizes {
                 sess.code_stats.print_type_sizes();
             }
+            if sess.opts.debugging_opts.print_inline_times {
+                sess.code_stats.print_inline_times();
+            }
 
             let linker = queries.linker()?;
             Ok(Some(linker))

@@ -140,6 +140,11 @@ impl Inliner<'tcx> {
                     continue;
                 }
                 debug!("attempting to inline callsite {:?} - success", callsite);
+                if self.tcx.sess.opts.debugging_opts.print_inline_times {
+                    let function_str =
+                        self.tcx.def_path_str_with_substs(callsite.callee, callsite.substs);
+                    self.tcx.sess.code_stats.record_function_inline_times(function_str);
+                }
 
                 // Add callsites from inlined function
                 for (bb, bb_data) in caller_body.basic_blocks().iter_enumerated().skip(start) {

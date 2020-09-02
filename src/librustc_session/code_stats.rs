@@ -1,3 +1,4 @@
+use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::sync::Lock;
 use rustc_target::abi::{Align, Size};
@@ -48,9 +49,32 @@ pub struct TypeSizeInfo {
 #[derive(Default)]
 pub struct CodeStats {
     type_sizes: Lock<FxHashSet<TypeSizeInfo>>,
+    inline_times: Lock<FxHashMap<String, u64>>,
 }
 
 impl CodeStats {
+    pub fn record_function_inline_times<S: ToString>(&self, funtion: S) {
+        let mut inline_times = self.inline_times.borrow_mut();
+        let count = inline_times.entry(funtion.to_string()).or_insert(0);
+        *count += 1;
+    }
+
+    pub fn print_inline_times(&self) {
+        let inline_times = self.inline_times.borrow();
+        let mut sorted: Vec<_> = inline_times.iter().collect();
+
+        // Primary sort: large-to-small.
+        // Secondary sort: description (dictionary order)
+        sorted.sort_by(|t1, t2| {
+            // (reversing cmp order to get large-to-small ordering)
+            t2.1.cmp(&t1.1)
+        });
+
+        for (function, times) in sorted.iter() {
+            println!("print-line-times: function `{}`: inlined {} times", function, times);
+        }
+    }
+
     pub fn record_type_size<S: ToString>(
         &self,
         kind: DataTypeKind,
