@@ -157,14 +157,14 @@ impl<'tcx> Constraint<'tcx> {
         }
     }
 
-    pub fn to_region_outlives_predicate(&self, tcx: TyCtxt<'tcx>) -> RegionOutlivesPredicate<'_> {
+    pub fn to_region_outlives_predicate(self, tcx: TyCtxt<'tcx>) -> RegionOutlivesPredicate<'_> {
         match self {
             Self::VarSubVar(a, b) => OutlivesPredicate(
-                tcx.mk_region(RegionKind::ReVar(*a)),
-                tcx.mk_region(RegionKind::ReVar(*b)),
+                tcx.mk_region(RegionKind::ReVar(a)),
+                tcx.mk_region(RegionKind::ReVar(b)),
             ),
-            Self::RegSubVar(a, b) => OutlivesPredicate(a, tcx.mk_region(RegionKind::ReVar(*b))),
-            Self::VarSubReg(a, b) => OutlivesPredicate(tcx.mk_region(RegionKind::ReVar(*a)), b),
+            Self::RegSubVar(a, b) => OutlivesPredicate(a, tcx.mk_region(RegionKind::ReVar(b))),
+            Self::VarSubReg(a, b) => OutlivesPredicate(tcx.mk_region(RegionKind::ReVar(a)), b),
             Self::RegSubReg(a, b) => OutlivesPredicate(a, b),
         }
     }

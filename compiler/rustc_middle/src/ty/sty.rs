@@ -162,9 +162,12 @@ pub enum TyKind<'tcx> {
     /// `|a| yield a`.
     Generator(DefId, SubstsRef<'tcx>, hir::Movability),
 
-    /// A type representin the types stored inside a generator.
+    /// A type representin the types and region outlives stored inside a generator.
     /// This should only appear in GeneratorInteriors.
-    GeneratorWitness(Binder<&'tcx List<Ty<'tcx>>>),
+    GeneratorWitness(
+        Binder<&'tcx List<Ty<'tcx>>>,
+        Binder<&'tcx List<ty::RegionOutlivesPredicate<'tcx>>>,
+    ),
 
     /// The never type `!`
     Never,

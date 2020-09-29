@@ -34,6 +34,7 @@ use rustc_hir::def_id::DefId;
 use rustc_hir::Constness;
 use rustc_middle::dep_graph::{DepKind, DepNodeIndex};
 use rustc_middle::mir::interpret::ErrorHandled;
+use rustc_middle::traits;
 use rustc_middle::ty::fast_reject;
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_middle::ty::relate::TypeRelation;
@@ -1694,7 +1695,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 vec![ty].into_iter().chain(iter::once(witness)).collect()
             }
 
-            ty::GeneratorWitness(types) => {
+            ty::GeneratorWitness(types, _) => {
                 // This is sound because no regions in the witness can refer to
                 // the binder outside the witness. So we'll effectivly reuse
                 // the implicit binder around the witness.
@@ -1741,6 +1742,26 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             .skip_binder() // binder moved -\
             .iter()
             .flat_map(|ty| {
+                let param_env = if let ty::GeneratorWitness(_, predicates) = ty.kind() {
+                    let predicates: Vec<_> = param_env
+                        .caller_bounds()
+                        .to_vec()
+                        .into_iter()
+                        .chain(
+                            predicates
+                                .skip_binder()
+                                .into_iter()
+                                .map(|p| ty::Binder::bind(p).to_predicate(self.tcx())),
+                        )
+                        .collect();
+                    ty::ParamEnv::new(
+                        self.infcx.tcx.mk_predicates(predicates.iter()),
+                        traits::Reveal::UserFacing,
+                    )
+                } else {
+                    param_env
+                };
+
                 let ty: ty::Binder<Ty<'tcx>> = ty::Binder::bind(ty); // <----/
 
                 self.infcx.commit_unconditionally(|_| {

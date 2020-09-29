@@ -201,7 +201,21 @@ pub fn resolve_interior<'a, 'tcx>(
 
     // Extract type components to build the witness type.
     let type_list = fcx.tcx.mk_type_list(type_causes.iter().map(|cause| cause.ty));
-    let witness = fcx.tcx.mk_generator_witness(ty::Binder::bind(type_list));
+
+    let region_constraints = visitor.fcx.with_region_constraints(|constraints_data| {
+        constraints_data
+            .constraints
+            .keys()
+            .map(|constraints| constraints.to_region_outlives_predicate(fcx.tcx))
+            .collect::<Vec<_>>()
+    });
+    debug!("region outlives inside generator: {:?}", region_constraints);
+
+    let region_outlives_list = fcx.tcx.mk_region_outlives_predicates(region_constraints.iter());
+
+    let witness = fcx
+        .tcx
+        .mk_generator_witness(ty::Binder::bind(type_list), ty::Binder::bind(region_outlives_list));
 
     // Store the generator types and spans into the typeck results for this generator.
     visitor.fcx.inh.typeck_results.borrow_mut().generator_interior_types = type_causes;

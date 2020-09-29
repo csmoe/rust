@@ -853,6 +853,16 @@ impl<'tcx> TypeFoldable<'tcx> for &'tcx ty::List<ty::ExistentialPredicate<'tcx>>
     }
 }
 
+impl<'tcx> TypeFoldable<'tcx> for &'tcx ty::List<ty::RegionOutlivesPredicate<'tcx>> {
+    fn super_fold_with<F: TypeFolder<'tcx>>(&self, folder: &mut F) -> Self {
+        fold_list(*self, folder, |tcx, v| tcx.intern_region_outlives_predicates(v))
+    }
+
+    fn super_visit_with<V: TypeVisitor<'tcx>>(&self, visitor: &mut V) -> bool {
+        self.iter().any(|p| p.visit_with(visitor))
+    }
+}
+
 impl<'tcx> TypeFoldable<'tcx> for &'tcx ty::List<Ty<'tcx>> {
     fn super_fold_with<F: TypeFolder<'tcx>>(self, folder: &mut F) -> Self {
         ty::util::fold_list(self, folder, |tcx, v| tcx.intern_type_list(v))
@@ -942,11 +952,12 @@ impl<'tcx> TypeFoldable<'tcx> for Ty<'tcx> {
             ty::Generator(did, substs, movability) => {
                 ty::Generator(did, substs.fold_with(folder), movability)
             }
-            ty::GeneratorWitness(types) => ty::GeneratorWitness(types.fold_with(folder)),
+            ty::GeneratorWitness(types, predicates) => {
+                ty::GeneratorWitness(types.fold_with(folder), predicates.fold_with(folder))
+            }
             ty::Closure(did, substs) => ty::Closure(did, substs.fold_with(folder)),
-            ty::Projection(data) => ty::Projection(data.fold_with(folder)),
+            ty::Projection(ref data) => ty::Projection(data.fold_with(folder)),
             ty::Opaque(did, substs) => ty::Opaque(did, substs.fold_with(folder)),
-
             ty::Bool
             | ty::Char
             | ty::Str
@@ -990,7 +1001,7 @@ impl<'tcx> TypeFoldable<'tcx> for Ty<'tcx> {
                 ty.visit_with(visitor)
             }
             ty::Generator(_did, ref substs, _) => substs.visit_with(visitor),
-            ty::GeneratorWitness(ref types) => types.visit_with(visitor),
+            ty::GeneratorWitness(ref types, _) => types.visit_with(visitor),
             ty::Closure(_did, ref substs) => substs.visit_with(visitor),
             ty::Projection(ref data) => data.visit_with(visitor),
             ty::Opaque(_, ref substs) => substs.visit_with(visitor),

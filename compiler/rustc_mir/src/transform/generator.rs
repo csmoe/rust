@@ -726,7 +726,7 @@ fn sanitize_witness<'tcx>(
     let did = body.source.def_id();
     let allowed_upvars = tcx.erase_regions(upvars);
     let allowed = match witness.kind() {
-        &ty::GeneratorWitness(s) => tcx.erase_late_bound_regions(s),
+        &ty::GeneratorWitness(s, _) => tcx.erase_late_bound_regions(s),
         _ => {
             tcx.sess.delay_span_bug(
                 body.span,

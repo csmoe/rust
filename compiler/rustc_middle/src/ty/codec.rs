@@ -13,7 +13,7 @@ use crate::mir::{
     interpret::{AllocId, Allocation},
 };
 use crate::ty::subst::SubstsRef;
-use crate::ty::{self, List, Ty, TyCtxt};
+use crate::ty::{self, List, RegionOutlivesPredicate, Ty, TyCtxt};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::def_id::{CrateNum, DefId};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -328,6 +328,15 @@ impl<'tcx, D: TyDecoder<'tcx>> RefDecodable<'tcx, D> for ty::List<ty::Existentia
     }
 }
 
+impl<'tcx, D: TyDecoder<'tcx>> RefDecodable<'tcx, D> for ty::List<RegionOutlivesPredicate<'tcx>> {
+    fn decode(decoder: &mut D) -> Result<&'tcx Self, D::Error> {
+        let len = decoder.read_usize()?;
+        Ok(decoder
+            .tcx()
+            .mk_region_outlives_predicates((0..len).map(|_| Decodable::decode(decoder)))?)
+    }
+}
+
 impl<'tcx, D: TyDecoder<'tcx>> RefDecodable<'tcx, D> for ty::Const<'tcx> {
     fn decode(decoder: &mut D) -> Result<&'tcx Self, D::Error> {
         Ok(decoder.tcx().mk_const(Decodable::decode(decoder)?))
@@ -373,6 +382,7 @@ impl<'tcx, D: TyDecoder<'tcx>> RefDecodable<'tcx, D> for [mir::abstract_const::N
 impl_decodable_via_ref! {
     &'tcx ty::TypeckResults<'tcx>,
     &'tcx ty::List<Ty<'tcx>>,
+    &'tcx ty::List<RegionOutlivesPredicate<'tcx>>,
     &'tcx ty::List<ty::ExistentialPredicate<'tcx>>,
     &'tcx Allocation,
     &'tcx mir::Body<'tcx>,

@@ -106,8 +106,7 @@ impl FlagComputation {
                 self.add_ty(substs.yield_ty());
                 self.add_ty(substs.tupled_upvars_ty());
             }
-
-            &ty::GeneratorWitness(ts) => {
+            &ty::GeneratorWitness(ts, _) => {
                 self.bound_computation(ts, |flags, ts| flags.add_tys(ts));
             }
 
