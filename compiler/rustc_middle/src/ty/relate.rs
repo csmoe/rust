@@ -288,22 +288,22 @@ impl<'tcx> Relate<'tcx> for ty::ExistentialTraitRef<'tcx> {
     }
 }
 
-impl<'tcx> Relate<'tcx> for ty::RegionOutlivesPredicate<'tcx> {
+impl<'tcx> Relate<'tcx> for ty::GenericOutlivesPredicate<'tcx> {
     fn relate<R: TypeRelation<'tcx>>(
         relation: &mut R,
         a: Self,
         b: Self,
     ) -> RelateResult<'tcx, Self> {
-        let a_region = relation.relate(a.0, b.0)?;
-        let b_region = relation.relate(a.1, b.1)?;
-        Ok(ty::OutlivesPredicate(a_region, b_region))
+        let generic_arg = relation.relate(a.0, b.0)?;
+        let region = relation.relate(a.1, b.1)?;
+        Ok(ty::OutlivesPredicate(generic_arg, region))
     }
 }
 
 #[derive(Copy, Debug, Clone, TypeFoldable)]
 struct GeneratorWitness<'tcx>(
     &'tcx ty::List<Ty<'tcx>>,
-    &'tcx ty::List<ty::RegionOutlivesPredicate<'tcx>>,
+    &'tcx ty::List<ty::GenericOutlivesPredicate<'tcx>>,
 );
 
 impl<'tcx> Relate<'tcx> for GeneratorWitness<'tcx> {
@@ -317,9 +317,8 @@ impl<'tcx> Relate<'tcx> for GeneratorWitness<'tcx> {
 
         let tcx = relation.tcx();
         let types = tcx.mk_type_list(a.0.iter().zip(b.0).map(|(a, b)| relation.relate(a, b)))?;
-        let predicates = tcx.mk_region_outlives_predicates(
-            a.1.iter().zip(b.1).map(|(a, b)| relation.relate(a, b)),
-        )?;
+        let predicates =
+            tcx.mk_outlives_predicates(a.1.iter().zip(b.1).map(|(a, b)| relation.relate(a, b)))?;
         Ok(GeneratorWitness(types, predicates))
     }
 }

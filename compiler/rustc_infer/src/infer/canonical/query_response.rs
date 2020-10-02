@@ -13,7 +13,7 @@ use crate::infer::canonical::{
     QueryOutlivesConstraint, QueryRegionConstraints, QueryResponse,
 };
 use crate::infer::nll_relate::{NormalizationStrategy, TypeRelating, TypeRelatingDelegate};
-use crate::infer::region_constraints::{Constraint, RegionConstraintData};
+use crate::infer::region_constraints::RegionConstraintData;
 use crate::infer::{InferCtxt, InferOk, InferResult, NLLRegionVariableOrigin};
 use crate::traits::query::{Fallible, NoSolution};
 use crate::traits::TraitEngine;
@@ -605,21 +605,7 @@ pub fn make_query_region_constraints<'tcx>(
 
     let outlives: Vec<_> = constraints
         .iter()
-        .map(|(k, _)| match *k {
-            // Swap regions because we are going from sub (<=) to outlives
-            // (>=).
-            Constraint::VarSubVar(v1, v2) => ty::OutlivesPredicate(
-                tcx.mk_region(ty::ReVar(v2)).into(),
-                tcx.mk_region(ty::ReVar(v1)),
-            ),
-            Constraint::VarSubReg(v1, r2) => {
-                ty::OutlivesPredicate(r2.into(), tcx.mk_region(ty::ReVar(v1)))
-            }
-            Constraint::RegSubVar(r1, v2) => {
-                ty::OutlivesPredicate(tcx.mk_region(ty::ReVar(v2)).into(), r1)
-            }
-            Constraint::RegSubReg(r1, r2) => ty::OutlivesPredicate(r2.into(), r1),
-        })
+        .map(|(k, _)| k.to_outlives_predicate(tcx))
         .map(ty::Binder::dummy) // no bound vars in the code above
         .chain(
             outlives_obligations

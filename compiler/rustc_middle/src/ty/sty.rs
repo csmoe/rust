@@ -166,7 +166,7 @@ pub enum TyKind<'tcx> {
     /// This should only appear in GeneratorInteriors.
     GeneratorWitness(
         Binder<&'tcx List<Ty<'tcx>>>,
-        Binder<&'tcx List<ty::RegionOutlivesPredicate<'tcx>>>,
+        Binder<&'tcx List<ty::GenericOutlivesPredicate<'tcx>>>,
     ),
 
     /// The never type `!`

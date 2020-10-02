@@ -15,9 +15,9 @@ use rustc_data_structures::unify as ut;
 use rustc_data_structures::unify::UnifyKey;
 use rustc_hir::def_id::DefId;
 use rustc_index::vec::IndexVec;
+use rustc_middle::ty::OutlivesPredicate;
 use rustc_middle::ty::ReStatic;
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_middle::ty::{OutlivesPredicate, RegionKind, RegionOutlivesPredicate};
 use rustc_middle::ty::{ReLateBound, ReVar};
 use rustc_middle::ty::{Region, RegionVid};
 use rustc_span::Span;
@@ -157,15 +157,16 @@ impl<'tcx> Constraint<'tcx> {
         }
     }
 
-    pub fn to_region_outlives_predicate(self, tcx: TyCtxt<'tcx>) -> RegionOutlivesPredicate<'_> {
+    pub fn to_outlives_predicate(self, tcx: TyCtxt<'tcx>) -> ty::GenericOutlivesPredicate<'_> {
+        // Swap regions because we are going from sub (<=) to outlives
+        // (>=).
         match self {
-            Self::VarSubVar(a, b) => OutlivesPredicate(
-                tcx.mk_region(RegionKind::ReVar(a)),
-                tcx.mk_region(RegionKind::ReVar(b)),
-            ),
-            Self::RegSubVar(a, b) => OutlivesPredicate(a, tcx.mk_region(RegionKind::ReVar(b))),
-            Self::VarSubReg(a, b) => OutlivesPredicate(tcx.mk_region(RegionKind::ReVar(a)), b),
-            Self::RegSubReg(a, b) => OutlivesPredicate(a, b),
+            Self::VarSubVar(v1, v2) => {
+                OutlivesPredicate(tcx.mk_region(ty::ReVar(v2)).into(), tcx.mk_region(ty::ReVar(v1)))
+            }
+            Self::VarSubReg(v1, r2) => OutlivesPredicate(r2.into(), tcx.mk_region(ty::ReVar(v1))),
+            Self::RegSubVar(r1, v2) => OutlivesPredicate(tcx.mk_region(ty::ReVar(v2)).into(), r1),
+            Self::RegSubReg(r1, r2) => OutlivesPredicate(r2.into(), r1),
         }
     }
 }

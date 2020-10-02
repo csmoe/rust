@@ -15,7 +15,7 @@ use crate::mir::Body;
 use crate::mir::GeneratorLayout;
 use crate::traits::{self, Reveal};
 use crate::ty;
-use crate::ty::subst::{GenericArg, InternalSubsts, Subst, SubstsRef};
+use crate::ty::subst::{GenericArg, GenericArgKind, InternalSubsts, Subst, SubstsRef};
 use crate::ty::util::{Discr, IntTypeExt};
 use rustc_ast as ast;
 use rustc_attr as attr;
@@ -1361,6 +1361,23 @@ pub type RegionOutlivesPredicate<'tcx> = OutlivesPredicate<ty::Region<'tcx>, ty:
 pub type TypeOutlivesPredicate<'tcx> = OutlivesPredicate<Ty<'tcx>, ty::Region<'tcx>>;
 pub type PolyRegionOutlivesPredicate<'tcx> = ty::Binder<RegionOutlivesPredicate<'tcx>>;
 pub type PolyTypeOutlivesPredicate<'tcx> = ty::Binder<TypeOutlivesPredicate<'tcx>>;
+pub type GenericOutlivesPredicate<'tcx> = OutlivesPredicate<GenericArg<'tcx>, Region<'tcx>>;
+
+impl<'tcx> GenericOutlivesPredicate<'tcx> {
+    fn to_region_outlives_predicate(self) -> RegionOutlivesPredicate<'tcx> {
+        match self.0.unpack() {
+            GenericArgKind::Lifetime(r) => OutlivesPredicate(r, self.1),
+            _ => unreachable!("generic arg should be lifetime"),
+        }
+    }
+
+    fn to_type_outlives_predicate(self) -> TypeOutlivesPredicate<'tcx> {
+        match self.0.unpack() {
+            GenericArgKind::Type(r) => OutlivesPredicate(r, self.1),
+            _ => unreachable!("generic arg should be lifetime"),
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, TyEncodable, TyDecodable)]
 #[derive(HashStable, TypeFoldable)]
@@ -1485,6 +1502,20 @@ impl<'tcx> ToPredicate<'tcx> for PolyRegionOutlivesPredicate<'tcx> {
     fn to_predicate(self, tcx: TyCtxt<'tcx>) -> Predicate<'tcx> {
         PredicateAtom::RegionOutlives(self.skip_binder())
             .potentially_quantified(tcx, PredicateKind::ForAll)
+    }
+}
+
+impl<'tcx> ToPredicate<'tcx> for ty::Binder<GenericOutlivesPredicate<'tcx>> {
+    fn to_predicate(self, tcx: TyCtxt<'tcx>) -> Predicate<'tcx> {
+        match self.skip_binder().0.unpack() {
+            GenericArgKind::Type(..) => {
+                self.map_bound(|p| p.to_type_outlives_predicate()).to_predicate(tcx)
+            }
+            GenericArgKind::Lifetime(..) => {
+                self.map_bound(|p| p.to_region_outlives_predicate()).to_predicate(tcx)
+            }
+            _ => unreachable!("generic arg should be type or lifetime"),
+        }
     }
 }
 

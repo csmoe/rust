@@ -34,7 +34,6 @@ use rustc_hir::def_id::DefId;
 use rustc_hir::Constness;
 use rustc_middle::dep_graph::{DepKind, DepNodeIndex};
 use rustc_middle::mir::interpret::ErrorHandled;
-use rustc_middle::traits;
 use rustc_middle::ty::fast_reject;
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_middle::ty::relate::TypeRelation;
@@ -1724,6 +1723,10 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         trait_def_id: DefId,
         types: ty::Binder<Vec<Ty<'tcx>>>,
     ) -> Vec<PredicateObligation<'tcx>> {
+        debug!(
+            "collect_predicates_for_types: param_env={:?}, cause={:?}, trait={:?}, types={:?}",
+            param_env, cause, trait_def_id, types
+        );
         // Because the types were potentially derived from
         // higher-ranked obligations they may reference late-bound
         // regions. For example, `for<'a> Foo<&'a i32> : Copy` would
@@ -1756,11 +1759,12 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                         .collect();
                     ty::ParamEnv::new(
                         self.infcx.tcx.mk_predicates(predicates.iter()),
-                        traits::Reveal::UserFacing,
+                        param_env.reveal(),
                     )
                 } else {
                     param_env
                 };
+                debug!("collect_predicates_for_types: param_env={:?}", param_env);
 
                 let ty: ty::Binder<Ty<'tcx>> = ty::Binder::bind(ty); // <----/
 

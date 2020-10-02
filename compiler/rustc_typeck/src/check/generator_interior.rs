@@ -202,20 +202,30 @@ pub fn resolve_interior<'a, 'tcx>(
     // Extract type components to build the witness type.
     let type_list = fcx.tcx.mk_type_list(type_causes.iter().map(|cause| cause.ty));
 
-    let region_constraints = visitor.fcx.with_region_constraints(|constraints_data| {
+    let ty_outlives = fcx
+        .infcx
+        .inner
+        .borrow()
+        .region_obligations()
+        .iter()
+        .map(|(_, r_o)| ty::OutlivesPredicate(r_o.sup_type.into(), r_o.sub_region))
+        .collect::<Vec<_>>();
+
+    let outlives = visitor.fcx.with_region_constraints(|constraints_data| {
         constraints_data
             .constraints
             .keys()
-            .map(|constraints| constraints.to_region_outlives_predicate(fcx.tcx))
+            .map(|constraints| constraints.to_outlives_predicate(fcx.tcx))
+            .chain(ty_outlives.into_iter())
             .collect::<Vec<_>>()
     });
-    debug!("region outlives inside generator: {:?}", region_constraints);
 
-    let region_outlives_list = fcx.tcx.mk_region_outlives_predicates(region_constraints.iter());
+    debug!("outlives inside generator: {:?}", outlives);
 
-    let witness = fcx
-        .tcx
-        .mk_generator_witness(ty::Binder::bind(type_list), ty::Binder::bind(region_outlives_list));
+    let outlives_list = fcx.tcx.mk_outlives_predicates(outlives.iter());
+
+    let witness =
+        fcx.tcx.mk_generator_witness(ty::Binder::bind(type_list), ty::Binder::bind(outlives_list));
 
     // Store the generator types and spans into the typeck results for this generator.
     visitor.fcx.inh.typeck_results.borrow_mut().generator_interior_types = type_causes;
