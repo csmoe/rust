@@ -193,6 +193,7 @@ impl<'a, 'tcx> RegionCtxt<'a, 'tcx> {
         Subject(subject): Subject,
         param_env: ty::ParamEnv<'tcx>,
     ) -> RegionCtxt<'a, 'tcx> {
+        debug!("region_ctxt: param_env={:?}", param_env);
         let region_scope_tree = fcx.tcx.region_scope_tree(subject);
         let outlives_environment = OutlivesEnvironment::new(param_env);
         RegionCtxt {

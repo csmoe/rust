@@ -854,11 +854,11 @@ impl<'tcx> TypeFoldable<'tcx> for &'tcx ty::List<ty::ExistentialPredicate<'tcx>>
 }
 
 impl<'tcx> TypeFoldable<'tcx> for &'tcx ty::List<ty::GenericOutlivesPredicate<'tcx>> {
-    fn super_fold_with<F: TypeFolder<'tcx>>(&self, folder: &mut F) -> Self {
-        fold_list(*self, folder, |tcx, v| tcx.intern_outlives_predicates(v))
+    fn super_fold_with<F: TypeFolder<'tcx>>(self, folder: &mut F) -> Self {
+        ty::util::fold_list(self, folder, |tcx, v| tcx.intern_outlives_predicates(v))
     }
 
-    fn super_visit_with<V: TypeVisitor<'tcx>>(&self, visitor: &mut V) -> ControlFlow<()> {
+    fn super_visit_with<V: TypeVisitor<'tcx>>(&self, visitor: &mut V) -> ControlFlow<V::BreakTy> {
         self.iter().try_for_each(|p| p.visit_with(visitor))
     }
 }
