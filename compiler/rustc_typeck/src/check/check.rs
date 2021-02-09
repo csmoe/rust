@@ -510,6 +510,25 @@ pub(super) fn check_opaque_for_inheriting_lifetimes(
         generics: &'tcx ty::Generics,
     }
 
+    #[derive(Debug)]
+    struct SelfVisitor {
+        _selftys: Vec<Span>,
+    }
+
+    impl hir::intravisit::Visitor for SelfVisitor {
+        type Map = Map;
+
+        fn visit_path(&self, path: &Path) {
+            hir::intravisit::walk_path(path);
+            match path.res {
+                hir::Res::SelfTy(..) => {
+                    self._self.push(path.span);
+                }
+                _ => {}
+            }
+        }
+    }
+
     impl<'tcx> ty::fold::TypeVisitor<'tcx> for ProhibitOpaqueVisitor<'tcx> {
         type BreakTy = Ty<'tcx>;
 
@@ -536,6 +555,8 @@ pub(super) fn check_opaque_for_inheriting_lifetimes(
             ),
             generics: tcx.generics_of(def_id),
         };
+        let map = tcx.hir().map();
+        map.visit_with(|m| m.visit());
         let prohibit_opaque = tcx
             .explicit_item_bounds(def_id)
             .iter()
@@ -562,14 +583,16 @@ pub(super) fn check_opaque_for_inheriting_lifetimes(
                 if is_async { "async fn" } else { "impl Trait" },
             );
 
-            if let Ok(snippet) = tcx.sess.source_map().span_to_snippet(span) {
-                if snippet == "Self" {
-                    err.span_suggestion(
-                        span,
-                        "consider spelling out the type instead",
-                        format!("{:?}", ty),
-                        Applicability::MaybeIncorrect,
-                    );
+            for span in map._selftys.iter() {
+                if let Ok(snippet) = tcx.sess.source_map().span_to_snippet(span) {
+                    if snippet == "Self" {
+                        err.span_suggestion(
+                            span,
+                            "consider spelling out the type instead",
+                            format!("{:?}", ty),
+                            Applicability::MaybeIncorrect,
+                        );
+                    }
                 }
             }
             err.emit();
