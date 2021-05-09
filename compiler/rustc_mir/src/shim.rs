@@ -65,7 +65,9 @@ fn make_shim<'tcx>(tcx: TyCtxt<'tcx>, instance: ty::InstanceDef<'tcx>) -> Body<'
             build_call_shim(tcx, instance, Some(Adjustment::RefMut), CallKind::Direct(call_mut))
         }
         ty::InstanceDef::DropGlue(def_id, ty) => build_drop_shim(tcx, def_id, ty),
-        ty::InstanceDef::CloneShim(def_id, ty) => build_clone_shim(tcx, def_id, ty),
+        ty::InstanceDef::CloneShim(def_id, ty, from_derive) => {
+            build_clone_shim(tcx, def_id, ty, from_derive)
+        }
         ty::InstanceDef::Virtual(..) => {
             bug!("InstanceDef::Virtual ({:?}) is for direct calls only", instance)
         }
@@ -295,19 +297,24 @@ impl<'a, 'tcx> DropElaborator<'a, 'tcx> for DropShimElaborator<'a, 'tcx> {
 }
 
 /// Builds a `Clone::clone` shim for `self_ty`. Here, `def_id` is `Clone::clone`.
-fn build_clone_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'tcx>) -> Body<'tcx> {
+fn build_clone_shim<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    self_ty: Ty<'tcx>,
+    from_derive: bool,
+) -> Body<'tcx> {
     debug!("build_clone_shim(def_id={:?})", def_id);
 
     let param_env = tcx.param_env(def_id);
 
-    let mut builder = CloneShimBuilder::new(tcx, def_id, self_ty);
+    let mut builder = CloneShimBuilder::new(tcx, def_id, self_ty, from_derive);
     let is_copy = self_ty.is_copy_modulo_regions(tcx.at(builder.span), param_env);
 
     let dest = Place::return_place();
     let src = tcx.mk_place_deref(Place::from(Local::new(1 + 0)));
 
     match self_ty.kind() {
-        _ if is_copy => builder.copy_shim(),
+        _ if is_copy || from_derive => builder.copy_shim(),
         ty::Array(ty, len) => builder.array_shim(dest, src, ty, len),
         ty::Closure(_, substs) => {
             builder.tuple_like_shim(dest, src, substs.as_closure().upvar_tys())
@@ -326,10 +333,11 @@ struct CloneShimBuilder<'tcx> {
     blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
     span: Span,
     sig: ty::FnSig<'tcx>,
+    from_derive: bool,
 }
 
 impl CloneShimBuilder<'tcx> {
-    fn new(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'tcx>) -> Self {
+    fn new(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'tcx>, from_derive: bool) -> Self {
         // we must subst the self_ty because it's
         // otherwise going to be TySelf and we can't index
         // or access fields of a Place of type TySelf.
@@ -345,6 +353,7 @@ impl CloneShimBuilder<'tcx> {
             blocks: IndexVec::new(),
             span,
             sig,
+            from_derive,
         }
     }
 
@@ -352,6 +361,7 @@ impl CloneShimBuilder<'tcx> {
         let source = MirSource::from_instance(ty::InstanceDef::CloneShim(
             self.def_id,
             self.sig.inputs_and_output[0],
+            self.from_derive,
         ));
         new_body(source, self.blocks, self.local_decls, self.sig.inputs().len(), self.span)
     }

@@ -541,6 +541,31 @@ fn type_implements_trait<'tcx>(
     tcx.infer_ctxt().enter(|infcx| infcx.predicate_must_hold_modulo_regions(&obligation))
 }
 
+fn is_transitive_derive_clone(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> bool {
+    match ty.kind() {
+        ty::Adt(adt_def, substs) => {
+            let derived_clone = tcx.require_lang_item(rustc_hir::LangItem::DerivedClone, None);
+            let is_derived_clone = tcx.type_implements_trait((
+                derived_clone,
+                ty,
+                InternalSubsts::empty(),
+                ParamEnv::empty(),
+            ));
+
+            is_derived_clone
+                && adt_def.all_fields().all(|field| {
+                    tcx.is_transitive_derive_clone(field.ty(tcx, substs)) || {
+                        let param_env = tcx.param_env(field.did);
+                        field
+                            .ty(tcx, substs)
+                            .is_copy_modulo_regions(tcx.at(tcx.def_span(field.did)), param_env)
+                    }
+                })
+        }
+        _ => true,
+    }
+}
+
 pub fn provide(providers: &mut ty::query::Providers) {
     object_safety::provide(providers);
     structural_match::provide(providers);
@@ -550,6 +575,7 @@ pub fn provide(providers: &mut ty::query::Providers) {
         codegen_fulfill_obligation: codegen::codegen_fulfill_obligation,
         vtable_methods,
         type_implements_trait,
+        is_transitive_derive_clone,
         subst_and_check_impossible_predicates,
         mir_abstract_const: |tcx, def_id| {
             let def_id = def_id.expect_local();

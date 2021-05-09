@@ -778,6 +778,10 @@ rustc_queries! {
         }
     }
 
+    query is_transitive_derive_clone(key: Ty<'tcx>) -> bool {
+        desc { "determining if item {:?} transitively derives Clone", key }
+    }
+
     /// Evaluates a constant and returns the computed allocation.
     ///
     /// **Do not use this** directly, use the `tcx.eval_static_initializer` wrapper.

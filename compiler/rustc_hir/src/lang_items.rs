@@ -194,6 +194,7 @@ language_item_table! {
     StructuralPeq,           sym::structural_peq,      structural_peq_trait,       Target::Trait;
     // Trait injected by #[derive(Eq)], (i.e. "Total EQ"; no, I will not apologize).
     StructuralTeq,           sym::structural_teq,      structural_teq_trait,       Target::Trait;
+    DerivedClone,            sym::derived_clone,       derived_clone_trait,        Target::Trait;
     Copy,                    sym::copy,                copy_trait,                 Target::Trait;
     Clone,                   sym::clone,               clone_trait,                Target::Trait;
     Sync,                    sym::sync,                sync_trait,                 Target::Trait;

@@ -206,6 +206,12 @@ pub trait StructuralEq {
     // Empty.
 }
 
+/// temp
+#[cfg(not(bootstrap))]
+#[unstable(feature = "structural_match", issue = "31434")]
+#[lang = "derived_clone"]
+pub trait DerivedClone {}
+
 /// Types whose values can be duplicated simply by copying bits.
 ///
 /// By default, variable bindings have 'move semantics.' In other

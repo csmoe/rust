@@ -92,7 +92,7 @@ pub enum InstanceDef<'tcx> {
     /// Additionally, arrays, tuples, and closures get a `Clone` shim even if they aren't `Copy`.
     ///
     /// The `DefId` is for `Clone::clone`, the `Ty` is the type `T` with the builtin `Clone` impl.
-    CloneShim(DefId, Ty<'tcx>),
+    CloneShim(DefId, Ty<'tcx>, bool),
 }
 
 impl<'tcx> Instance<'tcx> {
@@ -148,7 +148,7 @@ impl<'tcx> InstanceDef<'tcx> {
             | InstanceDef::Intrinsic(def_id)
             | InstanceDef::ClosureOnceShim { call_once: def_id }
             | InstanceDef::DropGlue(def_id, _)
-            | InstanceDef::CloneShim(def_id, _) => def_id,
+            | InstanceDef::CloneShim(def_id, _, _) => def_id,
         }
     }
 
@@ -163,7 +163,7 @@ impl<'tcx> InstanceDef<'tcx> {
             | InstanceDef::Intrinsic(def_id)
             | InstanceDef::ClosureOnceShim { call_once: def_id }
             | InstanceDef::DropGlue(def_id, _)
-            | InstanceDef::CloneShim(def_id, _) => ty::WithOptConstParam::unknown(def_id),
+            | InstanceDef::CloneShim(def_id, _, _) => ty::WithOptConstParam::unknown(def_id),
         }
     }
 
@@ -274,7 +274,9 @@ impl<'tcx> fmt::Display for Instance<'tcx> {
             InstanceDef::ClosureOnceShim { .. } => write!(f, " - shim"),
             InstanceDef::DropGlue(_, None) => write!(f, " - shim(None)"),
             InstanceDef::DropGlue(_, Some(ty)) => write!(f, " - shim(Some({}))", ty),
-            InstanceDef::CloneShim(_, ty) => write!(f, " - shim({})", ty),
+            InstanceDef::CloneShim(_, ty, from_derive) => {
+                write!(f, " - shim({:?}), from_derive={}", ty, from_derive)
+            }
         }
     }
 }
