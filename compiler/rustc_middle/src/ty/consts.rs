@@ -2,7 +2,7 @@ use crate::mir::interpret::ConstValue;
 use crate::mir::interpret::{LitToConstInput, Scalar};
 use crate::ty::{
     self, InlineConstSubsts, InlineConstSubstsParts, InternalSubsts, ParamEnv, ParamEnvAnd, Ty,
-    TyCtxt, TypeFoldable,
+    TyCtxt,
 };
 use rustc_errors::ErrorReported;
 use rustc_hir as hir;

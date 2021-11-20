@@ -1806,7 +1806,7 @@ impl<'tcx> TyS<'tcx> {
         match self.kind() {
             Adt(def, substs) => {
                 let variant = def.non_enum_variant();
-                let f0_ty = variant.fields[0].ty(tcx, substs);
+                let f0_ty = variant.fields[0].ty(tcx, *substs);
 
                 match f0_ty.kind() {
                     Array(f0_elem_ty, f0_len) => {

@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::num::NonZeroUsize;
 use std::ops::ControlFlow;
+use std::ops::Deref;
 
 /// An entity in the Rust type system, which can be one of
 /// several kinds (types, lifetimes, and consts).
@@ -185,9 +186,25 @@ impl<'tcx, D: TyDecoder<'tcx>> Decodable<D> for GenericArg<'tcx> {
 /// A substitution mapping generic parameters to new values.
 pub type InternalSubsts<'tcx> = List<GenericArg<'tcx>>;
 
-pub type SubstsRef<'tcx> = &'tcx InternalSubsts<'tcx>;
+#[derive(Copy, Clone, Debug, Hash, PartialEq, PartialOrd,Ord,Eq, HashStable, TyEncodable, Lift)]
+pub struct SubstsRef<'tcx> {
+    inner: &'tcx InternalSubsts<'tcx>
+}
 
-impl<'a, 'tcx> InternalSubsts<'tcx> {
+impl Deref for SubstsRef<'tcx> {
+    type Target = [GenericArg<'tcx>];
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'tcx> From<&'tcx List<GenericArg<'tcx>>> for SubstsRef<'tcx> {
+    fn from(inner: &'tcx List<GenericArg<'tcx>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'a, 'tcx> SubstsRef<'tcx> {
     /// Interpret these substitutions as the substitutions of a closure type.
     /// Closure substitutions have a particular structure controlled by the
     /// compiler that encodes information like the signature and closure kind;

@@ -140,7 +140,7 @@ pub fn relate_substs<R: TypeRelation<'tcx>>(
 ) -> RelateResult<'tcx, SubstsRef<'tcx>> {
     let tcx = relation.tcx();
 
-    let params = iter::zip(a_subst, b_subst).enumerate().map(|(i, (a, b))| {
+    let params = iter::zip(&*a_subst, &*b_subst).enumerate().map(|(i, (a, b))| {
         let variance = variances.map_or(ty::Invariant, |v| v[i]);
         relation.relate_with_variance(variance, ty::VarianceDiagInfo::default(), a, b)
     });
@@ -293,7 +293,7 @@ impl<'tcx> Relate<'tcx> for ty::ExistentialProjection<'tcx> {
                 a.ty,
                 b.ty,
             )?;
-            let substs = relation.relate_with_variance(
+            let substs = &relation.relate_with_variance(
                 ty::Invariant,
                 ty::VarianceDiagInfo::default(),
                 a.substs,

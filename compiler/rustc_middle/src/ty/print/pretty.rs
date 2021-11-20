@@ -209,7 +209,7 @@ pub trait PrettyPrinter<'tcx>:
     fn print_value_path(
         self,
         def_id: DefId,
-        substs: &'tcx [GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
     ) -> Result<Self::Path, Self::Error> {
         self.print_def_path(def_id, substs)
     }
@@ -2279,7 +2279,7 @@ define_print_and_forward_display! {
     }
 
     TraitRefPrintOnlyTraitPath<'tcx> {
-        p!(print_def_path(self.0.def_id, self.0.substs));
+        p!(print_def_path(self.0.def_id, &self.0.substs));
     }
 
     TraitRefPrintOnlyTraitName<'tcx> {
@@ -2312,7 +2312,7 @@ define_print_and_forward_display! {
     }
 
     ty::ProjectionTy<'tcx> {
-        p!(print_def_path(self.item_def_id, self.substs));
+        p!(print_def_path(self.item_def_id, &self.substs));
     }
 
     ty::ClosureKind {
@@ -2348,7 +2348,7 @@ define_print_and_forward_display! {
                 write("` implements the trait `{}`", kind))
             }
             ty::PredicateKind::ConstEvaluatable(uv) => {
-                p!("the constant `", print_value_path(uv.def.did, uv.substs_.map_or(&[], |x| x)), "` can be evaluated")
+                p!("the constant `", print_value_path(uv.def.did, uv.substs_.map_or(&[], |x| &x)), "` can be evaluated")
             }
             ty::PredicateKind::ConstEquate(c1, c2) => {
                 p!("the constant `", print(c1), "` equals `", print(c2), "`")
