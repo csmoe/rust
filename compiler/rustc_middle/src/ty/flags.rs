@@ -158,7 +158,7 @@ impl FlagComputation {
             }
 
             &ty::Adt(_, substs) => {
-                self.add_substs(substs);
+                self.add_substs(&*substs);
             }
 
             &ty::Projection(data) => {
@@ -168,13 +168,13 @@ impl FlagComputation {
 
             &ty::Opaque(_, substs) => {
                 self.add_flags(TypeFlags::HAS_TY_OPAQUE);
-                self.add_substs(substs);
+                self.add_substs(&*substs);
             }
 
             &ty::Dynamic(obj, r) => {
                 for predicate in obj.iter() {
                     self.bound_computation(predicate, |computation, predicate| match predicate {
-                        ty::ExistentialPredicate::Trait(tr) => computation.add_substs(tr.substs),
+                        ty::ExistentialPredicate::Trait(tr) => computation.add_substs(&*tr.substs),
                         ty::ExistentialPredicate::Projection(p) => {
                             computation.add_existential_projection(&p);
                         }
@@ -206,7 +206,7 @@ impl FlagComputation {
             }
 
             &ty::FnDef(_, substs) => {
-                self.add_substs(substs);
+                self.add_substs(&*substs);
             }
 
             &ty::FnPtr(fn_sig) => self.bound_computation(fn_sig, |computation, fn_sig| {
@@ -223,7 +223,7 @@ impl FlagComputation {
     fn add_predicate_atom(&mut self, atom: ty::PredicateKind<'_>) {
         match atom {
             ty::PredicateKind::Trait(trait_pred) => {
-                self.add_substs(trait_pred.trait_ref.substs);
+                self.add_substs(&*trait_pred.trait_ref.substs);
             }
             ty::PredicateKind::RegionOutlives(ty::OutlivesPredicate(a, b)) => {
                 self.add_region(a);
@@ -250,7 +250,7 @@ impl FlagComputation {
             }
             ty::PredicateKind::ObjectSafe(_def_id) => {}
             ty::PredicateKind::ClosureKind(_def_id, substs, _kind) => {
-                self.add_substs(substs);
+                self.add_substs(&*substs);
             }
             ty::PredicateKind::ConstEvaluatable(uv) => {
                 self.add_unevaluated_const(uv);
@@ -317,7 +317,7 @@ impl FlagComputation {
         // FIXME(@lcnr): Actually add a link here.
         if let Some(substs) = ct.substs_ {
             // If they are available, we treat them as ordinary generic arguments.
-            self.add_substs(substs);
+            self.add_substs(&*substs);
         } else {
             // Otherwise, we add `HAS_UNKNOWN_DEFAULT_CONST_SUBSTS` to signify
             // that our const may potentially refer to generic parameters.
@@ -332,12 +332,12 @@ impl FlagComputation {
     }
 
     fn add_existential_projection(&mut self, projection: &ty::ExistentialProjection<'_>) {
-        self.add_substs(projection.substs);
+        self.add_substs(&*projection.substs);
         self.add_ty(projection.ty);
     }
 
     fn add_projection_ty(&mut self, projection_ty: ty::ProjectionTy<'_>) {
-        self.add_substs(projection_ty.substs);
+        self.add_substs(&*projection_ty.substs);
     }
 
     fn add_substs(&mut self, substs: &[GenericArg<'_>]) {

@@ -1,7 +1,7 @@
 //! An iterator over the type substructure.
 //! WARNING: this does not keep track of the region depth.
 
-use crate::ty::subst::{GenericArg, GenericArgKind};
+use crate::ty::subst::{GenericArg, GenericArgKind, SubstsRef};
 use crate::ty::{self, TyCtxt};
 use rustc_data_structures::sso::SsoHashSet;
 use smallvec::{self, SmallVec};
@@ -176,11 +176,11 @@ fn push_inner<'tcx>(
                         ty::ExistentialPredicate::AutoTrait(_) =>
                         // Empty iterator
                         {
-                            (ty::InternalSubsts::empty(), None)
+                            (SubstsRef::empty(), None)
                         }
                     };
 
-                    substs.iter().rev().chain(opt_ty.map(|ty| ty.into()))
+                    substs.into_iter().rev().chain(opt_ty.map(|ty| ty.into()))
                 }));
             }
             ty::Adt(_, substs)

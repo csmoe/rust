@@ -278,8 +278,8 @@ impl<'tcx> TyCtxt<'tcx> {
                     if a_def == b_def && a_def.is_struct() =>
                 {
                     if let Some(f) = a_def.non_enum_variant().fields.last() {
-                        a = f.ty(self, a_substs);
-                        b = f.ty(self, b_substs);
+                        a = f.ty(self, *a_substs);
+                        b = f.ty(self, *b_substs);
                     } else {
                         break;
                     }
@@ -486,7 +486,8 @@ impl<'tcx> TyCtxt<'tcx> {
         env_region: ty::RegionKind,
     ) -> Option<Ty<'tcx>> {
         let closure_ty = self.mk_closure(closure_def_id, closure_substs);
-        let closure_kind_ty = closure_substs.as_closure().kind_ty();
+        let closure_substs = closure_substs.as_closure();
+        let closure_kind_ty = closure_substs.kind_ty();
         let closure_kind = closure_kind_ty.to_opt_closure_kind()?;
         let env_ty = match closure_kind {
             ty::ClosureKind::Fn => self.mk_imm_ref(self.mk_region(env_region), closure_ty),
@@ -580,7 +581,7 @@ impl<'tcx> OpaqueTypeExpander<'tcx> {
                 Some(expanded_ty) => expanded_ty,
                 None => {
                     let generic_ty = self.tcx.type_of(def_id);
-                    let concrete_ty = generic_ty.subst(self.tcx, substs);
+                    let concrete_ty = generic_ty.subst(self.tcx, &substs);
                     let expanded_ty = self.fold_ty(concrete_ty);
                     self.expanded_cache.insert((def_id, substs), expanded_ty);
                     expanded_ty

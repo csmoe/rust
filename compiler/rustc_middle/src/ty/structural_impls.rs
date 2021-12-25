@@ -6,7 +6,7 @@ use crate::mir::interpret;
 use crate::mir::ProjectionKind;
 use crate::ty::fold::{TypeFoldable, TypeFolder, TypeVisitor};
 use crate::ty::print::{with_no_trimmed_paths, FmtPrinter, Printer};
-use crate::ty::{self, InferConst, Lift, Ty, TyCtxt};
+use crate::ty::{self, InferConst, Lift, SubstsRef, Ty, TyCtxt};
 use rustc_data_structures::functor::IdFunctor;
 use rustc_hir::def::Namespace;
 use rustc_hir::def_id::CRATE_DEF_INDEX;
@@ -21,7 +21,8 @@ impl fmt::Debug for ty::TraitDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         ty::tls::with(|tcx| {
             with_no_trimmed_paths(|| {
-                FmtPrinter::new(tcx, f, Namespace::TypeNS).print_def_path(self.def_id, &[])
+                FmtPrinter::new(tcx, f, Namespace::TypeNS)
+                    .print_def_path(self.def_id, SubstsRef::empty())
             })?;
             Ok(())
         })
@@ -32,7 +33,8 @@ impl fmt::Debug for ty::AdtDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         ty::tls::with(|tcx| {
             with_no_trimmed_paths(|| {
-                FmtPrinter::new(tcx, f, Namespace::TypeNS).print_def_path(self.did, &[])
+                FmtPrinter::new(tcx, f, Namespace::TypeNS)
+                    .print_def_path(self.did, SubstsRef::empty())
             })?;
             Ok(())
         })

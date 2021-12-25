@@ -1,6 +1,6 @@
 use crate::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use crate::ty::print::{FmtPrinter, Printer};
-use crate::ty::subst::{InternalSubsts, Subst};
+use crate::ty::subst::Subst;
 use crate::ty::{self, SubstsRef, Ty, TyCtxt, TypeFoldable};
 use rustc_errors::ErrorReported;
 use rustc_hir::def::Namespace;
@@ -310,7 +310,7 @@ impl<'tcx> Instance<'tcx> {
     }
 
     pub fn mono(tcx: TyCtxt<'tcx>, def_id: DefId) -> Instance<'tcx> {
-        let substs = InternalSubsts::for_item(tcx, def_id, |param, _| match param.kind {
+        let substs = SubstsRef::for_item(tcx, def_id, |param, _| match param.kind {
             ty::GenericParamDefKind::Lifetime => tcx.lifetimes.re_erased.into(),
             ty::GenericParamDefKind::Type { .. } => {
                 bug!("Instance::mono: {:?} has type parameters", def_id)
@@ -505,7 +505,7 @@ impl<'tcx> Instance<'tcx> {
 
     pub fn resolve_drop_in_place(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> ty::Instance<'tcx> {
         let def_id = tcx.require_lang_item(LangItem::DropInPlace, None);
-        let substs = tcx.intern_substs(&[ty.into()]);
+        let substs = tcx.intern_substs(&[ty.into()]).into();
         Instance::resolve(tcx, ty::ParamEnv::reveal_all(), def_id, substs).unwrap().unwrap()
     }
 
@@ -555,7 +555,7 @@ impl<'tcx> Instance<'tcx> {
     where
         T: TypeFoldable<'tcx> + Copy,
     {
-        if let Some(substs) = self.substs_for_mir_body() { v.subst(tcx, substs) } else { *v }
+        if let Some(substs) = self.substs_for_mir_body() { v.subst(tcx, &substs) } else { *v }
     }
 
     #[inline(always)]
@@ -654,7 +654,7 @@ fn polymorphize<'tcx>(
         }
     }
 
-    InternalSubsts::for_item(tcx, def_id, |param, _| {
+    SubstsRef::for_item(tcx, def_id, |param, _| {
         let is_unused = unused.contains(param.index).unwrap_or(false);
         debug!("polymorphize: param={:?} is_unused={:?}", param, is_unused);
         match param.kind {

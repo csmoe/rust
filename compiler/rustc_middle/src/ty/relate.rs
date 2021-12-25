@@ -145,7 +145,7 @@ pub fn relate_substs<R: TypeRelation<'tcx>>(
         relation.relate_with_variance(variance, ty::VarianceDiagInfo::default(), a, b)
     });
 
-    tcx.mk_substs(params)
+    tcx.mk_substs(params).map(SubstsRef::from)
 }
 
 impl<'tcx> Relate<'tcx> for ty::FnSig<'tcx> {
@@ -269,7 +269,7 @@ impl<'tcx> Relate<'tcx> for ty::ProjectionTy<'tcx> {
             )))
         } else {
             let substs = relation.relate(a.substs, b.substs)?;
-            Ok(ty::ProjectionTy { item_def_id: a.item_def_id, substs: &substs })
+            Ok(ty::ProjectionTy { item_def_id: a.item_def_id, substs })
         }
     }
 }
@@ -293,7 +293,7 @@ impl<'tcx> Relate<'tcx> for ty::ExistentialProjection<'tcx> {
                 a.ty,
                 b.ty,
             )?;
-            let substs = &relation.relate_with_variance(
+            let substs = relation.relate_with_variance(
                 ty::Invariant,
                 ty::VarianceDiagInfo::default(),
                 a.substs,
@@ -445,7 +445,7 @@ pub fn super_relate_tys<R: TypeRelation<'tcx>>(
             // the (anonymous) type of the same closure expression. So
             // all of their regions should be equated.
             let substs = relation.relate(a_substs, b_substs)?;
-            Ok(tcx.mk_closure(a_id, &substs))
+            Ok(tcx.mk_closure(a_id, substs))
         }
 
         (&ty::RawPtr(a_mt), &ty::RawPtr(b_mt)) => {

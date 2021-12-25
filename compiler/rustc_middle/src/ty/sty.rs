@@ -6,7 +6,7 @@ use self::TyKind::*;
 
 use crate::infer::canonical::Canonical;
 use crate::ty::fold::ValidateBoundVars;
-use crate::ty::subst::{GenericArg, InternalSubsts, Subst, SubstsRef};
+use crate::ty::subst::{GenericArg, Subst, SubstsRef};
 use crate::ty::InferTy::{self, *};
 use crate::ty::{
     self, AdtDef, DefIdTree, Discr, Ty, TyCtxt, TypeFlags, TypeFoldable, WithConstness,
@@ -342,13 +342,19 @@ impl<'tcx> ClosureSubsts<'tcx> {
         parts: ClosureSubstsParts<'tcx, Ty<'tcx>>,
     ) -> ClosureSubsts<'tcx> {
         ClosureSubsts {
-            substs: tcx.mk_substs(
-                parts.parent_substs.iter().copied().chain(
-                    [parts.closure_kind_ty, parts.closure_sig_as_fn_ptr_ty, parts.tupled_upvars_ty]
+            substs: tcx
+                .mk_substs(
+                    parts.parent_substs.iter().copied().chain(
+                        [
+                            parts.closure_kind_ty,
+                            parts.closure_sig_as_fn_ptr_ty,
+                            parts.tupled_upvars_ty,
+                        ]
                         .iter()
                         .map(|&ty| ty.into()),
-                ),
-            ),
+                    ),
+                )
+                .into(),
         }
     }
 
@@ -379,7 +385,7 @@ impl<'tcx> ClosureSubsts<'tcx> {
     }
 
     /// Returns the substitutions of the closure's parent.
-    pub fn parent_substs(self) -> &'tcx [GenericArg<'tcx>] {
+    pub fn parent_substs(&'tcx self) -> &'tcx [GenericArg<'tcx>] {
         self.split().parent_substs
     }
 
@@ -462,19 +468,21 @@ impl<'tcx> GeneratorSubsts<'tcx> {
         parts: GeneratorSubstsParts<'tcx, Ty<'tcx>>,
     ) -> GeneratorSubsts<'tcx> {
         GeneratorSubsts {
-            substs: tcx.mk_substs(
-                parts.parent_substs.iter().copied().chain(
-                    [
-                        parts.resume_ty,
-                        parts.yield_ty,
-                        parts.return_ty,
-                        parts.witness,
-                        parts.tupled_upvars_ty,
-                    ]
-                    .iter()
-                    .map(|&ty| ty.into()),
-                ),
-            ),
+            substs: tcx
+                .mk_substs(
+                    parts.parent_substs.iter().copied().chain(
+                        [
+                            parts.resume_ty,
+                            parts.yield_ty,
+                            parts.return_ty,
+                            parts.witness,
+                            parts.tupled_upvars_ty,
+                        ]
+                        .iter()
+                        .map(|&ty| ty.into()),
+                    ),
+                )
+                .into(),
         }
     }
 
@@ -656,7 +664,7 @@ impl<'tcx> GeneratorSubsts<'tcx> {
     ) -> impl Iterator<Item = impl Iterator<Item = Ty<'tcx>> + Captures<'tcx>> {
         let layout = tcx.generator_layout(def_id).unwrap();
         layout.variant_fields.iter().map(move |variant| {
-            variant.iter().map(move |field| layout.field_tys[*field].subst(tcx, self.substs))
+            variant.iter().map(move |field| layout.field_tys[*field].subst(tcx, &self.substs))
         })
     }
 
@@ -679,13 +687,8 @@ impl<'tcx> UpvarSubsts<'tcx> {
     /// In case there was a type error in figuring out the types of the captured path, an
     /// empty iterator is returned.
     #[inline]
-    pub fn upvar_tys(self) -> impl Iterator<Item = Ty<'tcx>> + 'tcx {
-        let tupled_tys = match self {
-            UpvarSubsts::Closure(substs) => substs.as_closure().tupled_upvars_ty(),
-            UpvarSubsts::Generator(substs) => substs.as_generator().tupled_upvars_ty(),
-        };
-
-        match tupled_tys.kind() {
+    pub fn upvar_tys(&'tcx self) -> impl Iterator<Item = Ty<'tcx>> + 'tcx {
+        match self.tupled_upvars_ty().kind() {
             TyKind::Error(_) => None,
             TyKind::Tuple(..) => Some(self.tupled_upvars_ty().tuple_fields()),
             TyKind::Infer(_) => bug!("upvar_tys called before capture types are inferred"),
@@ -696,7 +699,7 @@ impl<'tcx> UpvarSubsts<'tcx> {
     }
 
     #[inline]
-    pub fn tupled_upvars_ty(self) -> Ty<'tcx> {
+    pub fn tupled_upvars_ty(&'tcx self) -> Ty<'tcx> {
         match self {
             UpvarSubsts::Closure(substs) => substs.as_closure().tupled_upvars_ty(),
             UpvarSubsts::Generator(substs) => substs.as_generator().tupled_upvars_ty(),
@@ -738,9 +741,11 @@ impl<'tcx> InlineConstSubsts<'tcx> {
         parts: InlineConstSubstsParts<'tcx, Ty<'tcx>>,
     ) -> InlineConstSubsts<'tcx> {
         InlineConstSubsts {
-            substs: tcx.mk_substs(
-                parts.parent_substs.iter().copied().chain(std::iter::once(parts.ty.into())),
-            ),
+            substs: tcx
+                .mk_substs(
+                    parts.parent_substs.iter().copied().chain(std::iter::once(parts.ty.into())),
+                )
+                .into(),
         }
     }
 
@@ -905,10 +910,7 @@ impl<'tcx> TraitRef<'tcx> {
     /// Returns a `TraitRef` of the form `P0: Foo<P1..Pn>` where `Pi`
     /// are the parameters defined on trait.
     pub fn identity(tcx: TyCtxt<'tcx>, def_id: DefId) -> Binder<'tcx, TraitRef<'tcx>> {
-        ty::Binder::dummy(TraitRef {
-            def_id,
-            substs: InternalSubsts::identity_for_item(tcx, def_id),
-        })
+        ty::Binder::dummy(TraitRef { def_id, substs: SubstsRef::identity_for_item(tcx, def_id) })
     }
 
     #[inline]
@@ -923,7 +925,10 @@ impl<'tcx> TraitRef<'tcx> {
     ) -> ty::TraitRef<'tcx> {
         let defs = tcx.generics_of(trait_id);
 
-        ty::TraitRef { def_id: trait_id, substs: tcx.intern_substs(&substs[..defs.params.len()]) }
+        ty::TraitRef {
+            def_id: trait_id,
+            substs: tcx.intern_substs(&substs[..defs.params.len()]).into(),
+        }
     }
 }
 
@@ -971,7 +976,7 @@ impl<'tcx> ExistentialTraitRef<'tcx> {
 
         ty::ExistentialTraitRef {
             def_id: trait_ref.def_id,
-            substs: tcx.intern_substs(&trait_ref.substs[1..]),
+            substs: tcx.intern_substs(&trait_ref.substs[1..]).into(),
         }
     }
 
@@ -983,7 +988,7 @@ impl<'tcx> ExistentialTraitRef<'tcx> {
         // otherwise the escaping vars would be captured by the binder
         // debug_assert!(!self_ty.has_escaping_bound_vars());
 
-        ty::TraitRef { def_id: self.def_id, substs: tcx.mk_substs_trait(self_ty, self.substs) }
+        ty::TraitRef { def_id: self.def_id, substs: tcx.mk_substs_trait(self_ty, &self.substs) }
     }
 }
 
@@ -1186,12 +1191,12 @@ impl<'tcx> ProjectionTy<'tcx> {
     pub fn trait_ref_and_own_substs(
         &self,
         tcx: TyCtxt<'tcx>,
-    ) -> (ty::TraitRef<'tcx>, &'tcx [ty::GenericArg<'tcx>]) {
+    ) -> (ty::TraitRef<'tcx>, SubstsRef<'tcx>) {
         let def_id = tcx.associated_item(self.item_def_id).container.id();
         let trait_generics = tcx.generics_of(def_id);
         (
             ty::TraitRef { def_id, substs: self.substs.truncate_to(tcx, trait_generics) },
-            &self.substs[trait_generics.count()..],
+            tcx.intern_substs(&self.substs[trait_generics.count()..]).into(),
         )
     }
 
@@ -1540,7 +1545,7 @@ impl<'tcx> ExistentialProjection<'tcx> {
     pub fn trait_ref(&self, tcx: TyCtxt<'tcx>) -> ty::ExistentialTraitRef<'tcx> {
         let def_id = tcx.associated_item(self.item_def_id).container.id();
         let subst_count = tcx.generics_of(def_id).count() - 1;
-        let substs = tcx.intern_substs(&self.substs[..subst_count]);
+        let substs = tcx.intern_substs(&self.substs[..subst_count]).into();
         ty::ExistentialTraitRef { def_id, substs }
     }
 
@@ -1555,7 +1560,7 @@ impl<'tcx> ExistentialProjection<'tcx> {
         ty::ProjectionPredicate {
             projection_ty: ty::ProjectionTy {
                 item_def_id: self.item_def_id,
-                substs: tcx.mk_substs_trait(self_ty, self.substs),
+                substs: tcx.mk_substs_trait(self_ty, &self.substs).into(),
             },
             ty: self.ty,
         }
@@ -1570,7 +1575,7 @@ impl<'tcx> ExistentialProjection<'tcx> {
 
         Self {
             item_def_id: projection_predicate.projection_ty.item_def_id,
-            substs: tcx.intern_substs(&projection_predicate.projection_ty.substs[1..]),
+            substs: tcx.intern_substs(&projection_predicate.projection_ty.substs[1..]).into(),
             ty: projection_predicate.ty,
         }
     }
@@ -2025,7 +2030,7 @@ impl<'tcx> TyS<'tcx> {
 
     /// Iterates over tuple fields.
     /// Panics when called on anything but a tuple.
-    pub fn tuple_fields(&self) -> impl DoubleEndedIterator<Item = Ty<'tcx>> {
+    pub fn tuple_fields(&self) -> impl DoubleEndedIterator<Item = Ty<'tcx>> + '_ {
         match self.kind() {
             Tuple(substs) => substs.iter().map(|field| field.expect_ty()),
             _ => bug!("tuple_fields called on non-tuple"),
@@ -2091,7 +2096,7 @@ impl<'tcx> TyS<'tcx> {
                 let assoc_items = tcx.associated_item_def_ids(
                     tcx.require_lang_item(hir::LangItem::DiscriminantKind, None),
                 );
-                tcx.mk_projection(assoc_items[0], tcx.intern_substs(&[self.into()]))
+                tcx.mk_projection(assoc_items[0], tcx.intern_substs(&[self.into()]).into())
             }
 
             ty::Bool

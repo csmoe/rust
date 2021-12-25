@@ -1,5 +1,5 @@
 use crate::mir::interpret::{AllocRange, ConstValue, GlobalAlloc, Pointer, Provenance, Scalar};
-use crate::ty::subst::{GenericArg, GenericArgKind, Subst};
+use crate::ty::subst::{GenericArg, GenericArgKind, Subst, SubstsRef};
 use crate::ty::{self, ConstInt, DefIdTree, ParamConst, ScalarInt, Ty, TyCtxt, TypeFoldable};
 use rustc_apfloat::ieee::{Double, Single};
 use rustc_data_structures::fx::FxHashMap;
@@ -365,7 +365,9 @@ pub trait PrettyPrinter<'tcx>:
                         // in cases where the `extern crate foo` has non-trivial
                         // parents, e.g. it's nested in `impl foo::Trait for Bar`
                         // (see also issues #55779 and #87932).
-                        self = with_no_visible_paths(|| self.print_def_path(def_id, &[]))?;
+                        self = with_no_visible_paths(|| {
+                            self.print_def_path(def_id, SubstsRef::empty())
+                        })?;
 
                         return Ok((self, true));
                     }
@@ -576,7 +578,7 @@ pub trait PrettyPrinter<'tcx>:
                 p!(")")
             }
             ty::FnDef(def_id, substs) => {
-                let sig = self.tcx().fn_sig(def_id).subst(self.tcx(), substs);
+                let sig = self.tcx().fn_sig(def_id).subst(self.tcx(), &substs);
                 p!(print(sig), " {{", print_value_path(def_id, substs), "}}");
             }
             ty::FnPtr(ref bare_fn) => p!(print(bare_fn)),
@@ -616,7 +618,7 @@ pub trait PrettyPrinter<'tcx>:
                 }
             }
             ty::Foreign(def_id) => {
-                p!(print_def_path(def_id, &[]));
+                p!(print_def_path(def_id, SubstsRef::empty()));
             }
             ty::Projection(ref data) => p!(print(data)),
             ty::Placeholder(placeholder) => p!(write("Placeholder({:?})", placeholder)),
@@ -651,7 +653,7 @@ pub trait PrettyPrinter<'tcx>:
                     let mut is_sized = false;
                     p!("impl");
                     for (predicate, _) in bounds {
-                        let predicate = predicate.subst(self.tcx(), substs);
+                        let predicate = predicate.subst(self.tcx(), &substs);
                         let bound_predicate = predicate.kind();
                         if let ty::PredicateKind::Trait(pred) = bound_predicate.skip_binder() {
                             let trait_ref = bound_predicate.rebind(pred.trait_ref);
@@ -808,7 +810,7 @@ pub trait PrettyPrinter<'tcx>:
         if let Some(principal) = predicates.principal() {
             self = self.wrap_binder(&principal, |principal, mut cx| {
                 define_scoped_cx!(cx);
-                p!(print_def_path(principal.def_id, &[]));
+                p!(print_def_path(principal.def_id, SubstsRef::empty()));
 
                 let mut resugared = false;
 
@@ -842,7 +844,7 @@ pub trait PrettyPrinter<'tcx>:
                         GenericArgKind::Lifetime(r) => *r != ty::ReErased,
                         _ => false,
                     });
-                    let mut args = args.iter().cloned().filter(|arg| match arg.unpack() {
+                    let mut args = args.iter().filter(|arg| match arg.unpack() {
                         GenericArgKind::Lifetime(_) => print_regions,
                         _ => true,
                     });
@@ -892,7 +894,7 @@ pub trait PrettyPrinter<'tcx>:
             }
             first = false;
 
-            p!(print_def_path(def_id, &[]));
+            p!(print_def_path(def_id, SubstsRef::empty()));
         }
 
         Ok(self)
@@ -1108,7 +1110,7 @@ pub trait PrettyPrinter<'tcx>:
             }
             // For function type zsts just printing the path is enough
             ty::FnDef(d, s) if int == ScalarInt::ZST => {
-                p!(print_value_path(*d, s))
+                p!(print_value_path(*d, *s))
             }
             // Nontrivial types with scalar bit representation
             _ => {
@@ -1373,14 +1375,14 @@ fn guess_def_namespace(tcx: TyCtxt<'_>, def_id: DefId) -> Namespace {
     }
 }
 
-impl TyCtxt<'t> {
+impl TyCtxt<'tcx> {
     /// Returns a string identifying this `DefId`. This string is
     /// suitable for user output.
     pub fn def_path_str(self, def_id: DefId) -> String {
-        self.def_path_str_with_substs(def_id, &[])
+        self.def_path_str_with_substs(def_id, SubstsRef::empty())
     }
 
-    pub fn def_path_str_with_substs(self, def_id: DefId, substs: &'t [GenericArg<'t>]) -> String {
+    pub fn def_path_str_with_substs(self, def_id: DefId, substs: SubstsRef<'tcx>) -> String {
         let ns = guess_def_namespace(self, def_id);
         debug!("def_path_str: def_id={:?}, ns={:?}", def_id, ns);
         let mut s = String::new();
@@ -1411,7 +1413,7 @@ impl<F: fmt::Write> Printer<'tcx> for FmtPrinter<'_, 'tcx, F> {
     fn print_def_path(
         mut self,
         def_id: DefId,
-        substs: &'tcx [GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
     ) -> Result<Self::Path, Self::Error> {
         define_scoped_cx!(self);
 
@@ -1444,7 +1446,7 @@ impl<F: fmt::Write> Printer<'tcx> for FmtPrinter<'_, 'tcx, F> {
                 let parent_def_id = DefId { index: key.parent.unwrap(), ..def_id };
                 let span = self.tcx.def_span(def_id);
 
-                self = self.print_def_path(parent_def_id, &[])?;
+                self = self.print_def_path(parent_def_id, SubstsRef::empty())?;
 
                 // HACK(eddyb) copy of `path_append` to avoid
                 // constructing a `DisambiguatedDefPathData`.
@@ -1614,7 +1616,7 @@ impl<F: fmt::Write> PrettyPrinter<'tcx> for FmtPrinter<'_, 'tcx, F> {
     fn print_value_path(
         mut self,
         def_id: DefId,
-        substs: &'tcx [GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
     ) -> Result<Self::Path, Self::Error> {
         let was_in_value = std::mem::replace(&mut self.in_value, true);
         self = self.print_def_path(def_id, substs)?;
@@ -2259,7 +2261,7 @@ define_print_and_forward_display! {
             ty::ExistentialPredicate::Trait(x) => p!(print(x)),
             ty::ExistentialPredicate::Projection(x) => p!(print(x)),
             ty::ExistentialPredicate::AutoTrait(def_id) => {
-                p!(print_def_path(def_id, &[]));
+                p!(print_def_path(def_id, SubstsRef::empty()));
             }
         }
     }
@@ -2279,11 +2281,11 @@ define_print_and_forward_display! {
     }
 
     TraitRefPrintOnlyTraitPath<'tcx> {
-        p!(print_def_path(self.0.def_id, &self.0.substs));
+        p!(print_def_path(self.0.def_id, self.0.substs));
     }
 
     TraitRefPrintOnlyTraitName<'tcx> {
-        p!(print_def_path(self.0.def_id, &[]));
+        p!(print_def_path(self.0.def_id, SubstsRef::empty()));
     }
 
     ty::ParamTy {
@@ -2312,7 +2314,7 @@ define_print_and_forward_display! {
     }
 
     ty::ProjectionTy<'tcx> {
-        p!(print_def_path(self.item_def_id, &self.substs));
+        p!(print_def_path(self.item_def_id, self.substs));
     }
 
     ty::ClosureKind {
@@ -2340,15 +2342,15 @@ define_print_and_forward_display! {
             ty::PredicateKind::Projection(predicate) => p!(print(predicate)),
             ty::PredicateKind::WellFormed(arg) => p!(print(arg), " well-formed"),
             ty::PredicateKind::ObjectSafe(trait_def_id) => {
-                p!("the trait `", print_def_path(trait_def_id, &[]), "` is object-safe")
+                p!("the trait `", print_def_path(trait_def_id, SubstsRef::empty()), "` is object-safe")
             }
             ty::PredicateKind::ClosureKind(closure_def_id, _closure_substs, kind) => {
                 p!("the closure `",
-                print_value_path(closure_def_id, &[]),
+                print_value_path(closure_def_id, SubstsRef::empty()),
                 write("` implements the trait `{}`", kind))
             }
             ty::PredicateKind::ConstEvaluatable(uv) => {
-                p!("the constant `", print_value_path(uv.def.did, uv.substs_.map_or(&[], |x| &x)), "` can be evaluated")
+                p!("the constant `", print_value_path(uv.def.did, uv.substs_.map_or(SubstsRef::empty(), |x| x)), "` can be evaluated")
             }
             ty::PredicateKind::ConstEquate(c1, c2) => {
                 p!("the constant `", print(c1), "` equals `", print(c2), "`")

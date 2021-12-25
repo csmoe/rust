@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::mir::interpret::{AllocId, ConstValue, Scalar};
 use crate::mir::Promoted;
-use crate::ty::subst::{InternalSubsts, SubstsRef};
+use crate::ty::subst::SubstsRef;
 use crate::ty::ParamEnv;
 use crate::ty::{self, TyCtxt, TypeFoldable};
 use rustc_errors::ErrorReported;
@@ -173,7 +173,7 @@ impl<'tcx> ConstKind<'tcx> {
             let param_env_and = if param_env_and.needs_infer() {
                 tcx.param_env(unevaluated.def.did).and(ty::Unevaluated {
                     def: unevaluated.def,
-                    substs_: Some(InternalSubsts::identity_for_item(tcx, unevaluated.def.did)),
+                    substs_: Some(SubstsRef::identity_for_item(tcx, unevaluated.def.did)),
                     promoted: unevaluated.promoted,
                 })
             } else {

@@ -1,7 +1,8 @@
 use crate::mir::interpret::ConstValue;
 use crate::mir::interpret::{LitToConstInput, Scalar};
+use crate::ty::subst::SubstsRef;
 use crate::ty::{
-    self, InlineConstSubsts, InlineConstSubstsParts, InternalSubsts, ParamEnv, ParamEnvAnd, Ty,
+    self, fold::TypeFoldable, InlineConstSubsts, InlineConstSubstsParts, ParamEnv, ParamEnvAnd, Ty,
     TyCtxt,
 };
 use rustc_errors::ErrorReported;
@@ -145,8 +146,9 @@ impl<'tcx> Const<'tcx> {
             Some(v) => v,
             None => {
                 let typeck_root_def_id = tcx.typeck_root_def_id(def_id.to_def_id());
-                let parent_substs =
-                    tcx.erase_regions(InternalSubsts::identity_for_item(tcx, typeck_root_def_id));
+                let parent_substs = tcx.intern_substs(
+                    &tcx.erase_regions(SubstsRef::identity_for_item(tcx, typeck_root_def_id)),
+                );
                 let substs =
                     InlineConstSubsts::new(tcx, InlineConstSubstsParts { parent_substs, ty })
                         .substs;

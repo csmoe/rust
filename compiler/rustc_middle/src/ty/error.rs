@@ -429,7 +429,7 @@ impl<'tcx> TyCtxt<'tcx> {
                             let path =
                                 self.def_path_str_with_substs(trait_ref.def_id, trait_ref.substs);
                             let item_name = self.item_name(proj.item_def_id);
-                            let item_args = self.format_generic_args(assoc_substs);
+                            let item_args = self.format_generic_args(&assoc_substs);
 
                             let path = if path.ends_with('>') {
                                 format!(
@@ -627,7 +627,7 @@ impl<T> Trait<T> for X {
                             &trait_ref,
                             pred.bounds,
                             &assoc,
-                            assoc_substs,
+                            &assoc_substs,
                             ty,
                             msg,
                             false,
@@ -646,7 +646,7 @@ impl<T> Trait<T> for X {
                             &trait_ref,
                             param.bounds,
                             &assoc,
-                            assoc_substs,
+                            &assoc_substs,
                             ty,
                             msg,
                             false,
@@ -794,7 +794,7 @@ fn foo(&self) -> Self::T { String::new() }
                 &trait_ref,
                 opaque_hir_ty.bounds,
                 assoc,
-                assoc_substs,
+                &assoc_substs,
                 ty,
                 msg,
                 true,

@@ -44,7 +44,7 @@ impl<'tcx> PlaceTy<'tcx> {
                     }
                 };
                 let field_def = &variant_def.fields[f.index()];
-                field_def.ty(tcx, substs)
+                field_def.ty(tcx, *substs)
             }
             ty::Tuple(ref tys) => tys[f.index()].expect_ty(),
             _ => bug!("extracting field of non-tuple non-adt: {:?}", self),
@@ -200,7 +200,9 @@ impl<'tcx> Rvalue<'tcx> {
             Rvalue::Aggregate(ref ak, ref ops) => match **ak {
                 AggregateKind::Array(ty) => tcx.mk_array(ty, ops.len() as u64),
                 AggregateKind::Tuple => tcx.mk_tup(ops.iter().map(|op| op.ty(local_decls, tcx))),
-                AggregateKind::Adt(def, _, substs, _, _) => tcx.type_of(def.did).subst(tcx, substs),
+                AggregateKind::Adt(def, _, substs, _, _) => {
+                    tcx.type_of(def.did).subst(tcx, &substs[..])
+                }
                 AggregateKind::Closure(did, substs) => tcx.mk_closure(did, substs),
                 AggregateKind::Generator(did, substs, movability) => {
                     tcx.mk_generator(did, substs, movability)

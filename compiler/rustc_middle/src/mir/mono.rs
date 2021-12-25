@@ -1,5 +1,6 @@
 use crate::dep_graph::{DepNode, WorkProduct, WorkProductId};
-use crate::ty::{subst::InternalSubsts, Instance, InstanceDef, SymbolName, TyCtxt};
+use crate::ty::subst::SubstsRef;
+use crate::ty::{Instance, InstanceDef, SymbolName, TyCtxt};
 use rustc_attr::InlineAttr;
 use rustc_data_structures::base_n;
 use rustc_data_structures::fingerprint::Fingerprint;
@@ -169,12 +170,12 @@ impl<'tcx> MonoItem<'tcx> {
         debug!("is_instantiable({:?})", self);
         let (def_id, substs) = match *self {
             MonoItem::Fn(ref instance) => (instance.def_id(), instance.substs),
-            MonoItem::Static(def_id) => (def_id, InternalSubsts::empty()),
+            MonoItem::Static(def_id) => (def_id, SubstsRef::empty()),
             // global asm never has predicates
             MonoItem::GlobalAsm(..) => return true,
         };
 
-        !tcx.subst_and_check_impossible_predicates((def_id, &substs))
+        !tcx.subst_and_check_impossible_predicates((def_id, substs))
     }
 
     pub fn local_span(&self, tcx: TyCtxt<'tcx>) -> Option<Span> {
@@ -230,7 +231,7 @@ impl<'tcx> fmt::Display for MonoItem<'tcx> {
         match *self {
             MonoItem::Fn(instance) => write!(f, "fn {}", instance),
             MonoItem::Static(def_id) => {
-                write!(f, "static {}", Instance::new(def_id, InternalSubsts::empty()))
+                write!(f, "static {}", Instance::new(def_id, SubstsRef::empty()))
             }
             MonoItem::GlobalAsm(..) => write!(f, "global_asm"),
         }

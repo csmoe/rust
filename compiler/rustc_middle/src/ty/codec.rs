@@ -257,7 +257,7 @@ impl<'tcx, D: TyDecoder<'tcx>> Decodable<D> for SubstsRef<'tcx> {
     fn decode(decoder: &mut D) -> Result<Self, D::Error> {
         let len = decoder.read_usize()?;
         let tcx = decoder.tcx();
-        tcx.mk_substs((0..len).map(|_| Decodable::decode(decoder)))
+        tcx.mk_substs((0..len).map(|_| Decodable::decode(decoder))).map(SubstsRef::from)
     }
 }
 

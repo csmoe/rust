@@ -239,7 +239,7 @@ impl<'tcx> GenericPredicates<'tcx> {
         substs: SubstsRef<'tcx>,
     ) -> InstantiatedPredicates<'tcx> {
         InstantiatedPredicates {
-            predicates: self.predicates.iter().map(|(p, _)| p.subst(tcx, substs)).collect(),
+            predicates: self.predicates.iter().map(|(p, _)| p.subst(tcx, &substs)).collect(),
             spans: self.predicates.iter().map(|(_, sp)| *sp).collect(),
         }
     }
@@ -253,7 +253,7 @@ impl<'tcx> GenericPredicates<'tcx> {
         if let Some(def_id) = self.parent {
             tcx.predicates_of(def_id).instantiate_into(tcx, instantiated, substs);
         }
-        instantiated.predicates.extend(self.predicates.iter().map(|(p, _)| p.subst(tcx, substs)));
+        instantiated.predicates.extend(self.predicates.iter().map(|(p, _)| p.subst(tcx, &substs)));
         instantiated.spans.extend(self.predicates.iter().map(|(_, sp)| *sp));
     }
 

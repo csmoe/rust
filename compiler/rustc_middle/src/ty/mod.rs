@@ -23,7 +23,7 @@ use crate::hir::exports::ExportMap;
 use crate::mir::{Body, GeneratorLayout};
 use crate::traits::{self, Reveal};
 use crate::ty;
-use crate::ty::subst::{GenericArg, InternalSubsts, Subst, SubstsRef};
+use crate::ty::subst::{GenericArg, Subst, SubstsRef};
 use crate::ty::util::Discr;
 use rustc_ast as ast;
 use rustc_attr as attr;

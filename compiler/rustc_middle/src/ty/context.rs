@@ -604,7 +604,7 @@ impl<'tcx> TypeckResults<'tcx> {
 
     pub fn node_substs(&self, id: hir::HirId) -> SubstsRef<'tcx> {
         validate_hir_id_for_typeck_results(self.hir_owner, id);
-        self.node_substs.get(&id.local_id).cloned().unwrap_or_else(|| InternalSubsts::empty())
+        self.node_substs.get(&id.local_id).cloned().unwrap_or_else(|| SubstsRef::empty())
     }
 
     pub fn node_substs_opt(&self, id: hir::HirId) -> Option<SubstsRef<'tcx>> {
@@ -889,7 +889,7 @@ impl<'tcx> CommonTypes<'tcx> {
         let mk = |ty| interners.intern_ty(ty);
 
         CommonTypes {
-            unit: mk(Tuple(List::empty())),
+            unit: mk(Tuple(SubstsRef::empty())),
             bool: mk(Bool),
             char: mk(Char),
             never: mk(Never),
@@ -2257,18 +2257,17 @@ impl<'tcx> TyCtxt<'tcx> {
 
     fn mk_generic_adt(self, wrapper_def_id: DefId, ty_param: Ty<'tcx>) -> Ty<'tcx> {
         let adt_def = self.adt_def(wrapper_def_id);
-        let substs =
-            InternalSubsts::for_item(self, wrapper_def_id, |param, substs| match param.kind {
-                GenericParamDefKind::Lifetime | GenericParamDefKind::Const { .. } => bug!(),
-                GenericParamDefKind::Type { has_default, .. } => {
-                    if param.index == 0 {
-                        ty_param.into()
-                    } else {
-                        assert!(has_default);
-                        self.type_of(param.def_id).subst(self, substs).into()
-                    }
+        let substs = SubstsRef::for_item(self, wrapper_def_id, |param, substs| match param.kind {
+            GenericParamDefKind::Lifetime | GenericParamDefKind::Const { .. } => bug!(),
+            GenericParamDefKind::Type { has_default, .. } => {
+                if param.index == 0 {
+                    ty_param.into()
+                } else {
+                    assert!(has_default);
+                    self.type_of(param.def_id).subst(self, substs).into()
                 }
-            });
+            }
+        });
         self.mk_ty(Adt(adt_def, substs))
     }
 
@@ -2339,13 +2338,13 @@ impl<'tcx> TyCtxt<'tcx> {
     #[inline]
     pub fn intern_tup(self, ts: &[Ty<'tcx>]) -> Ty<'tcx> {
         let kinds: Vec<_> = ts.iter().map(|&t| GenericArg::from(t)).collect();
-        self.mk_ty(Tuple(self.intern_substs(&kinds)))
+        self.mk_ty(Tuple(self.intern_substs(&kinds).into()))
     }
 
     pub fn mk_tup<I: InternAs<[Ty<'tcx>], Ty<'tcx>>>(self, iter: I) -> I::Output {
         iter.intern_with(|ts| {
             let kinds: Vec<_> = ts.iter().map(|&t| GenericArg::from(t)).collect();
-            self.mk_ty(Tuple(self.intern_substs(&kinds)))
+            self.mk_ty(Tuple(self.intern_substs(&kinds).into()))
         })
     }
 
@@ -2614,7 +2613,7 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn mk_substs_trait(self, self_ty: Ty<'tcx>, rest: &[GenericArg<'tcx>]) -> SubstsRef<'tcx> {
-        self.mk_substs(iter::once(self_ty.into()).chain(rest.iter().cloned()))
+        self.mk_substs(iter::once(self_ty.into()).chain(rest.iter().cloned())).into()
     }
 
     pub fn mk_bound_variable_kinds<

@@ -10,6 +10,8 @@ use rustc_hir::definitions::{DefPathData, DisambiguatedDefPathData};
 mod pretty;
 pub use self::pretty::*;
 
+use super::subst::SubstsRef;
+
 // FIXME(eddyb) false positive, the lifetime parameters are used with `P:  Printer<...>`.
 #[allow(unused_lifetimes)]
 pub trait Print<'tcx, P> {
@@ -42,7 +44,7 @@ pub trait Printer<'tcx>: Sized {
     fn print_def_path(
         self,
         def_id: DefId,
-        substs: &'tcx [GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
     ) -> Result<Self::Path, Self::Error> {
         self.default_print_def_path(def_id, substs)
     }
@@ -50,7 +52,7 @@ pub trait Printer<'tcx>: Sized {
     fn print_impl_path(
         self,
         impl_def_id: DefId,
-        substs: &'tcx [GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
         self_ty: Ty<'tcx>,
         trait_ref: Option<ty::TraitRef<'tcx>>,
     ) -> Result<Self::Path, Self::Error> {
@@ -102,7 +104,7 @@ pub trait Printer<'tcx>: Sized {
     fn default_print_def_path(
         self,
         def_id: DefId,
-        substs: &'tcx [GenericArg<'tcx>],
+        substs: SubstsRef<'tcx>,
     ) -> Result<Self::Path, Self::Error> {
         let key = self.tcx().def_key(def_id);
         debug!(?key);
@@ -118,8 +120,8 @@ pub trait Printer<'tcx>: Sized {
                 let mut self_ty = self.tcx().type_of(def_id);
                 let mut impl_trait_ref = self.tcx().impl_trait_ref(def_id);
                 if substs.len() >= generics.count() {
-                    self_ty = self_ty.subst(self.tcx(), substs);
-                    impl_trait_ref = impl_trait_ref.subst(self.tcx(), substs);
+                    self_ty = self_ty.subst(self.tcx(), &substs);
+                    impl_trait_ref = impl_trait_ref.subst(self.tcx(), &substs);
                 }
                 self.print_impl_path(def_id, substs, self_ty, impl_trait_ref)
             }
@@ -131,7 +133,10 @@ pub trait Printer<'tcx>: Sized {
                 let mut trait_qualify_parent = false;
                 if !substs.is_empty() {
                     let generics = self.tcx().generics_of(def_id);
-                    parent_substs = &substs[..generics.parent_count.min(substs.len())];
+                    parent_substs = self
+                        .tcx()
+                        .intern_substs(&substs[..generics.parent_count.min(substs.len())])
+                        .into();
 
                     match key.disambiguated_data.data {
                         // Closures' own generics are only captures, don't print them.
@@ -144,7 +149,7 @@ pub trait Printer<'tcx>: Sized {
                                 let args = self.generic_args_to_print(generics, substs);
                                 return self.path_generic_args(
                                     |cx| cx.print_def_path(def_id, parent_substs),
-                                    args,
+                                    &args,
                                 );
                             }
                         }
@@ -163,7 +168,7 @@ pub trait Printer<'tcx>: Sized {
                         if trait_qualify_parent {
                             let trait_ref = ty::TraitRef::new(
                                 parent_def_id,
-                                cx.tcx().intern_substs(parent_substs),
+                                cx.tcx().intern_substs(&parent_substs).into(),
                             );
                             cx.path_qualified(trait_ref.self_ty(), Some(trait_ref))
                         } else {
@@ -179,8 +184,8 @@ pub trait Printer<'tcx>: Sized {
     fn generic_args_to_print(
         &self,
         generics: &'tcx ty::Generics,
-        substs: &'tcx [GenericArg<'tcx>],
-    ) -> &'tcx [GenericArg<'tcx>] {
+        substs: SubstsRef<'tcx>,
+    ) -> SubstsRef<'tcx> {
         let mut own_params = generics.parent_count..generics.count();
 
         // Don't print args for `Self` parameters (of traits).
@@ -199,7 +204,7 @@ pub trait Printer<'tcx>: Sized {
                     has_default
                         && substs[param.index as usize]
                             == GenericArg::from(
-                                self.tcx().type_of(param.def_id).subst(self.tcx(), substs),
+                                self.tcx().type_of(param.def_id).subst(self.tcx(), &substs),
                             )
                 }
                 ty::GenericParamDefKind::Const { has_default } => {
@@ -210,13 +215,13 @@ pub trait Printer<'tcx>: Sized {
             })
             .count();
 
-        &substs[own_params]
+        self.tcx().intern_substs(&substs[own_params]).into()
     }
 
     fn default_print_impl_path(
         self,
         impl_def_id: DefId,
-        _substs: &'tcx [GenericArg<'tcx>],
+        _substs: SubstsRef<'tcx>,
         self_ty: Ty<'tcx>,
         impl_trait_ref: Option<ty::TraitRef<'tcx>>,
     ) -> Result<Self::Path, Self::Error> {
@@ -247,7 +252,7 @@ pub trait Printer<'tcx>: Sized {
             // trait-type, then fallback to a format that identifies
             // the module more clearly.
             self.path_append_impl(
-                |cx| cx.print_def_path(parent_def_id, &[]),
+                |cx| cx.print_def_path(parent_def_id, SubstsRef::empty()),
                 &key.disambiguated_data,
                 self_ty,
                 impl_trait_ref,

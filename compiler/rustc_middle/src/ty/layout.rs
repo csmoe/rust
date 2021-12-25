@@ -677,7 +677,7 @@ impl<'tcx> LayoutCx<'tcx, TyCtxt<'tcx>> {
 
             ty::Generator(def_id, substs, _) => self.generator_layout(ty, def_id, substs)?,
 
-            ty::Closure(_, ref substs) => {
+            ty::Closure(_, substs) => {
                 let tys = substs.as_closure().upvar_tys();
                 univariant(
                     &tys.map(|ty| self.layout_of(ty)).collect::<Result<Vec<_>, _>>()?,
@@ -1545,7 +1545,7 @@ impl<'tcx> LayoutCx<'tcx, TyCtxt<'tcx>> {
     ) -> Result<&'tcx Layout, LayoutError<'tcx>> {
         use SavedLocalEligibility::*;
         let tcx = self.tcx;
-        let subst_field = |ty: Ty<'tcx>| ty.subst(tcx, substs);
+        let subst_field = |ty: Ty<'tcx>| ty.subst(tcx, &*substs);
 
         let info = match tcx.generator_layout(def_id) {
             None => return Err(LayoutError::Unknown(ty)),
@@ -2573,7 +2573,7 @@ impl<'tcx> ty::Instance<'tcx> {
                 let mut sig = match *ty.kind() {
                     ty::FnDef(def_id, substs) => tcx
                         .normalize_erasing_regions(tcx.param_env(def_id), tcx.fn_sig(def_id))
-                        .subst(tcx, substs),
+                        .subst(tcx, &substs),
                     _ => unreachable!(),
                 };
 
@@ -2633,13 +2633,13 @@ impl<'tcx> ty::Instance<'tcx> {
                 let pin_did = tcx.require_lang_item(LangItem::Pin, None);
                 let pin_adt_ref = tcx.adt_def(pin_did);
                 let pin_substs = tcx.intern_substs(&[env_ty.into()]);
-                let env_ty = tcx.mk_adt(pin_adt_ref, pin_substs);
+                let env_ty = tcx.mk_adt(pin_adt_ref, pin_substs.into());
 
                 let sig = sig.skip_binder();
                 let state_did = tcx.require_lang_item(LangItem::GeneratorState, None);
                 let state_adt_ref = tcx.adt_def(state_did);
                 let state_substs = tcx.intern_substs(&[sig.yield_ty.into(), sig.return_ty.into()]);
-                let ret_ty = tcx.mk_adt(state_adt_ref, state_substs);
+                let ret_ty = tcx.mk_adt(state_adt_ref, state_substs.into());
                 ty::Binder::bind_with_vars(
                     tcx.mk_fn_sig(
                         [env_ty, sig.resume_ty].iter(),

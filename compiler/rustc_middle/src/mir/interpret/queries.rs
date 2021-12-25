@@ -1,7 +1,7 @@
 use super::{ErrorHandled, EvalToConstValueResult, GlobalId};
 
 use crate::mir;
-use crate::ty::subst::InternalSubsts;
+use crate::ty::subst::SubstsRef;
 use crate::ty::{self, TyCtxt};
 use rustc_hir::def_id::DefId;
 use rustc_span::Span;
@@ -15,7 +15,7 @@ impl<'tcx> TyCtxt<'tcx> {
         // to be used. So we can't use `Instance::mono`, instead we feed unresolved substitutions
         // into `const_eval` which will return `ErrorHandled::ToGeneric` if any of them are
         // encountered.
-        let substs = InternalSubsts::identity_for_item(self, def_id);
+        let substs = SubstsRef::identity_for_item(self, def_id);
         let instance = ty::Instance::new(def_id, substs);
         let cid = GlobalId { instance, promoted: None };
         let param_env = self.param_env(def_id).with_reveal_all_normalized(self);

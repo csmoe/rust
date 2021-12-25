@@ -186,15 +186,15 @@ impl<'tcx, D: TyDecoder<'tcx>> Decodable<D> for GenericArg<'tcx> {
 /// A substitution mapping generic parameters to new values.
 pub type InternalSubsts<'tcx> = List<GenericArg<'tcx>>;
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, PartialOrd,Ord,Eq, HashStable, TyEncodable, Lift)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, HashStable, TyEncodable, Lift)]
 pub struct SubstsRef<'tcx> {
-    inner: &'tcx InternalSubsts<'tcx>
+    inner: &'tcx List<GenericArg<'tcx>>,
 }
 
-impl Deref for SubstsRef<'tcx> {
+impl<'tcx> Deref for SubstsRef<'tcx> {
     type Target = [GenericArg<'tcx>];
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    fn deref(&self) -> &'tcx Self::Target {
+        self.inner
     }
 }
 
@@ -205,11 +205,14 @@ impl<'tcx> From<&'tcx List<GenericArg<'tcx>>> for SubstsRef<'tcx> {
 }
 
 impl<'a, 'tcx> SubstsRef<'tcx> {
+    pub fn empty() -> Self {
+        Self { inner: List::empty() }
+    }
     /// Interpret these substitutions as the substitutions of a closure type.
     /// Closure substitutions have a particular structure controlled by the
     /// compiler that encodes information like the signature and closure kind;
     /// see `ty::ClosureSubsts` struct for more comments.
-    pub fn as_closure(&'a self) -> ClosureSubsts<'a> {
+    pub fn as_closure(self) -> ClosureSubsts<'tcx> {
         ClosureSubsts { substs: self }
     }
 
@@ -217,7 +220,7 @@ impl<'a, 'tcx> SubstsRef<'tcx> {
     /// Generator substitutions have a particular structure controlled by the
     /// compiler that encodes information like the signature and generator kind;
     /// see `ty::GeneratorSubsts` struct for more comments.
-    pub fn as_generator(&'tcx self) -> GeneratorSubsts<'tcx> {
+    pub fn as_generator(self) -> GeneratorSubsts<'tcx> {
         GeneratorSubsts { substs: self }
     }
 
@@ -225,7 +228,7 @@ impl<'a, 'tcx> SubstsRef<'tcx> {
     /// Inline const substitutions have a particular structure controlled by the
     /// compiler that encodes information like the inferred type;
     /// see `ty::InlineConstSubsts` struct for more comments.
-    pub fn as_inline_const(&'tcx self) -> InlineConstSubsts<'tcx> {
+    pub fn as_inline_const(self) -> InlineConstSubsts<'tcx> {
         InlineConstSubsts { substs: self }
     }
 
@@ -247,7 +250,7 @@ impl<'a, 'tcx> SubstsRef<'tcx> {
         let count = defs.count();
         let mut substs = SmallVec::with_capacity(count);
         Self::fill_item(&mut substs, tcx, defs, &mut mk_kind);
-        tcx.intern_substs(&substs)
+        tcx.intern_substs(&substs).into()
     }
 
     pub fn extend_to<F>(&self, tcx: TyCtxt<'tcx>, def_id: DefId, mut mk_kind: F) -> SubstsRef<'tcx>
@@ -380,11 +383,11 @@ impl<'a, 'tcx> SubstsRef<'tcx> {
         target_substs: SubstsRef<'tcx>,
     ) -> SubstsRef<'tcx> {
         let defs = tcx.generics_of(source_ancestor);
-        tcx.mk_substs(target_substs.iter().chain(self.iter().skip(defs.params.len())))
+        tcx.mk_substs(target_substs.iter().chain(self.iter().skip(defs.params.len()))).into()
     }
 
     pub fn truncate_to(&self, tcx: TyCtxt<'tcx>, generics: &ty::Generics) -> SubstsRef<'tcx> {
-        tcx.mk_substs(self.iter().take(generics.count()))
+        tcx.mk_substs(self.iter().take(generics.count())).into()
     }
 }
 
@@ -399,7 +402,7 @@ impl<'tcx> TypeFoldable<'tcx> for SubstsRef<'tcx> {
         match self.len() {
             1 => {
                 let param0 = self[0].fold_with(folder);
-                if param0 == self[0] { self } else { folder.tcx().intern_substs(&[param0]) }
+                if param0 == self[0] { self } else { folder.tcx().intern_substs(&[param0]).into() }
             }
             2 => {
                 let param0 = self[0].fold_with(folder);
@@ -407,13 +410,17 @@ impl<'tcx> TypeFoldable<'tcx> for SubstsRef<'tcx> {
                 if param0 == self[0] && param1 == self[1] {
                     self
                 } else {
-                    folder.tcx().intern_substs(&[param0, param1])
+                    folder.tcx().intern_substs(&[param0, param1]).into()
                 }
             }
             0 => self,
             _ => {
                 let params: SmallVec<[_; 8]> = self.iter().map(|k| k.fold_with(folder)).collect();
-                if params[..] == self[..] { self } else { folder.tcx().intern_substs(&params) }
+                if params[..] == self[..] {
+                    self
+                } else {
+                    folder.tcx().intern_substs(&params).into()
+                }
             }
         }
     }
