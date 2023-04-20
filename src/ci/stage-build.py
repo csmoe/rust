@@ -18,6 +18,7 @@ import traceback
 import urllib.request
 from io import StringIO
 from pathlib import Path
+from enum import Enum, unique
 from typing import Callable, ContextManager, Dict, Iterable, Iterator, List, Optional, \
     Tuple, Union
 
@@ -48,8 +49,17 @@ RUSTC_PGO_CRATES = [
 
 LLVM_BOLT_CRATES = LLVM_PGO_CRATES
 
+@unique
+class Type(Enum):
+    RUST_CI = 1
+    CUSTOM_BUILD = 2
 
 class Pipeline:
+    def __init__(self):
+        self.type = Type.RUST_CI
+        if "CUSTOM_BUILD_DIR" in os.environ and "CUSTOM_BUILD_CMD" in os.environ:
+            self.type = Type.CUSTOM_BUILD
+
     # Paths
     def checkout_path(self) -> Path:
         """
@@ -80,6 +90,15 @@ class Pipeline:
 
     def rustc_stage_2(self) -> Path:
         return self.build_artifacts() / "stage2" / "bin" / "rustc"
+
+    def custom_build(self) -> Tuple[Path, List[str]]:
+        try:
+            build_path = os.environ["CUSTOM_BUILD_DIR"],
+            build_cmd = os.environ["CUSTOM_BUILD_CMD"].split(" ")
+            self.type = Type.CUSTOM_BUILD
+            return (build_path, build_cmd)
+        except:
+            raise Exception(f"CUSTOM_BULID_DIR and CUSTOM_BUILD_CMD not setted for custom build")
 
     def opt_artifacts(self) -> Path:
         raise NotImplementedError
@@ -451,6 +470,20 @@ def cmd(
             )
     return subprocess.run(args, env=environment, check=True)
 
+def run_custom_build(
+    pipeline: Pipeline,
+    env: Optional[Dict[str, str]] = None
+):
+    env = env if env is not None else {}
+    (build_path, build_cmd) = pipeline.custom_build()
+    with change_cwd(build_path):
+        cmd(build_cmd, env=dict(
+            CARGO=str(pipeline.cargo_stage_2()),
+            RUST_LOG="collector=debug",
+            RUSTC=str(pipeline.rustc_stage_2()),
+            RUSTC_BOOTSTRAP="1",
+            **env
+        ))
 
 def run_compiler_benchmarks(
         pipeline: Pipeline,
@@ -582,12 +615,18 @@ def create_pipeline() -> Pipeline:
 
 def gather_llvm_profiles(pipeline: Pipeline):
     LOGGER.info("Running benchmarks with PGO instrumented LLVM")
-    run_compiler_benchmarks(
-        pipeline,
-        profiles=["Debug", "Opt"],
-        scenarios=["Full"],
-        crates=LLVM_PGO_CRATES
-    )
+
+    if pipeline.type is Type.CUSTOM_BUILD:
+        run_custom_build(
+            pipeline,
+        )
+    else:
+        run_compiler_benchmarks(
+            pipeline,
+            profiles=["Debug", "Opt"],
+            scenarios=["Full"],
+            crates=LLVM_PGO_CRATES
+        )
 
     profile_path = pipeline.llvm_profile_merged_file()
     LOGGER.info(f"Merging LLVM PGO profiles to {profile_path}")
@@ -614,15 +653,20 @@ def gather_rustc_profiles(pipeline: Pipeline):
 
     # Here we're profiling the `rustc` frontend, so we also include `Check`.
     # The benchmark set includes various stress tests that put the frontend under pressure.
-    run_compiler_benchmarks(
-        pipeline,
-        profiles=["Check", "Debug", "Opt"],
-        scenarios=["All"],
-        crates=RUSTC_PGO_CRATES,
-        env=dict(
-            LLVM_PROFILE_FILE=str(pipeline.rustc_profile_template_path())
+    if pipeline.type is Type.CUSTOM_BUILD:
+        run_custom_build(
+            pipeline,
         )
-    )
+    else:
+        run_compiler_benchmarks(
+            pipeline,
+            profiles=["Check", "Debug", "Opt"],
+            scenarios=["All"],
+            crates=RUSTC_PGO_CRATES,
+            env=dict(
+                LLVM_PROFILE_FILE=str(pipeline.rustc_profile_template_path())
+            )
+        )
 
     profile_path = pipeline.rustc_profile_merged_file()
     LOGGER.info(f"Merging Rustc PGO profiles to {profile_path}")
@@ -646,12 +690,18 @@ def gather_rustc_profiles(pipeline: Pipeline):
 
 def gather_llvm_bolt_profiles(pipeline: Pipeline):
     LOGGER.info("Running benchmarks with BOLT instrumented LLVM")
-    run_compiler_benchmarks(
-        pipeline,
-        profiles=["Check", "Debug", "Opt"],
-        scenarios=["Full"],
-        crates=LLVM_BOLT_CRATES
-    )
+
+    if pipeline.type is Type.CUSTOM_BUILD:
+        run_custom_build(
+            pipeline,
+        )
+    else:
+        run_compiler_benchmarks(
+            pipeline,
+            profiles=["Check", "Debug", "Opt"],
+            scenarios=["Full"],
+            crates=LLVM_BOLT_CRATES
+        )
 
     merged_profile_path = pipeline.llvm_bolt_profile_merged_file()
     profile_files_path = Path("/tmp/prof.fdata")
