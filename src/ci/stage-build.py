@@ -18,6 +18,7 @@ import traceback
 import urllib.request
 from io import StringIO
 from pathlib import Path
+from enum import Enum, unique
 from typing import Callable, ContextManager, Dict, Iterable, Iterator, List, Optional, \
     Tuple, Union
 
@@ -47,7 +48,6 @@ RUSTC_PGO_CRATES = [
 ]
 
 LLVM_BOLT_CRATES = LLVM_PGO_CRATES
-
 
 class Pipeline:
     # Paths
@@ -451,6 +451,42 @@ def cmd(
             )
     return subprocess.run(args, env=environment, check=True)
 
+class BenchmarkRunner:
+    def run_rustc(self, pipeline: Pipeline):
+        raise NotImplementedError
+
+    def run_llvm(self, pipeline: Pipeline):
+        raise NotImplementedError
+
+    def run_bolt(self, pipeline: Pipeline):
+        raise NotImplementedError
+
+class DefaultBenchmarkRunner(BenchmarkRunner):
+    def run_rustc(self, pipeline: Pipeline):
+         run_compiler_benchmarks(
+            pipeline,
+            profiles=["Check", "Debug", "Opt"],
+            scenarios=["All"],
+            crates=RUSTC_PGO_CRATES,
+            env=dict(
+                LLVM_PROFILE_FILE=str(pipeline.rustc_profile_template_path())
+            )
+        )
+    def run_llvm(self, pipeline: Pipeline):
+        run_compiler_benchmarks(
+            pipeline,
+            profiles=["Debug", "Opt"],
+            scenarios=["Full"],
+            crates=LLVM_PGO_CRATES
+        )
+
+    def run_bolt(self, pipeline: Pipeline):
+        run_compiler_benchmarks(
+            pipeline,
+            profiles=["Check", "Debug", "Opt"],
+            scenarios=["Full"],
+            crates=LLVM_BOLT_CRATES
+        )
 
 def run_compiler_benchmarks(
         pipeline: Pipeline,
@@ -580,14 +616,10 @@ def create_pipeline() -> Pipeline:
         raise Exception(f"Optimized build is not supported for platform {sys.platform}")
 
 
-def gather_llvm_profiles(pipeline: Pipeline):
+def gather_llvm_profiles(pipeline: Pipeline, runner: BenchmarkRunner):
     LOGGER.info("Running benchmarks with PGO instrumented LLVM")
-    run_compiler_benchmarks(
-        pipeline,
-        profiles=["Debug", "Opt"],
-        scenarios=["Full"],
-        crates=LLVM_PGO_CRATES
-    )
+
+    runner.run_llvm(pipeline)
 
     profile_path = pipeline.llvm_profile_merged_file()
     LOGGER.info(f"Merging LLVM PGO profiles to {profile_path}")
@@ -609,20 +641,12 @@ def gather_llvm_profiles(pipeline: Pipeline):
     delete_directory(pipeline.llvm_profile_dir_root())
 
 
-def gather_rustc_profiles(pipeline: Pipeline):
+def gather_rustc_profiles(pipeline: Pipeline, runner: BenchmarkRunner):
     LOGGER.info("Running benchmarks with PGO instrumented rustc")
 
     # Here we're profiling the `rustc` frontend, so we also include `Check`.
     # The benchmark set includes various stress tests that put the frontend under pressure.
-    run_compiler_benchmarks(
-        pipeline,
-        profiles=["Check", "Debug", "Opt"],
-        scenarios=["All"],
-        crates=RUSTC_PGO_CRATES,
-        env=dict(
-            LLVM_PROFILE_FILE=str(pipeline.rustc_profile_template_path())
-        )
-    )
+    runner.run_rustc(pipeline)
 
     profile_path = pipeline.rustc_profile_merged_file()
     LOGGER.info(f"Merging Rustc PGO profiles to {profile_path}")
@@ -644,14 +668,10 @@ def gather_rustc_profiles(pipeline: Pipeline):
     delete_directory(pipeline.rustc_profile_dir_root())
 
 
-def gather_llvm_bolt_profiles(pipeline: Pipeline):
+def gather_llvm_bolt_profiles(pipeline: Pipeline, runner: BenchmarkRunner):
     LOGGER.info("Running benchmarks with BOLT instrumented LLVM")
-    run_compiler_benchmarks(
-        pipeline,
-        profiles=["Check", "Debug", "Opt"],
-        scenarios=["Full"],
-        crates=LLVM_BOLT_CRATES
-    )
+
+    runner.run_bolt(pipeline)
 
     merged_profile_path = pipeline.llvm_bolt_profile_merged_file()
     profile_files_path = Path("/tmp/prof.fdata")
@@ -744,7 +764,7 @@ def record_metrics(pipeline: Pipeline, timer: Timer):
     log_metrics(metrics)
 
 
-def execute_build_pipeline(timer: Timer, pipeline: Pipeline, final_build_args: List[str]):
+def execute_build_pipeline(timer: Timer, pipeline: Pipeline, runner: BenchmarkRunner, final_build_args: List[str]):
     # Clear and prepare tmp directory
     shutil.rmtree(pipeline.opt_artifacts(), ignore_errors=True)
     os.makedirs(pipeline.opt_artifacts(), exist_ok=True)
@@ -762,7 +782,7 @@ def execute_build_pipeline(timer: Timer, pipeline: Pipeline, final_build_args: L
             record_metrics(pipeline, rustc_build)
 
         with stage1.section("Gather profiles"):
-            gather_llvm_profiles(pipeline)
+            gather_llvm_profiles(pipeline, runner)
         print_free_disk_space(pipeline)
 
     clear_llvm_files(pipeline)
@@ -781,7 +801,7 @@ def execute_build_pipeline(timer: Timer, pipeline: Pipeline, final_build_args: L
             record_metrics(pipeline, rustc_build)
 
         with stage2.section("Gather profiles"):
-            gather_rustc_profiles(pipeline)
+            gather_rustc_profiles(pipeline, runner)
         print_free_disk_space(pipeline)
 
     clear_llvm_files(pipeline)
@@ -804,7 +824,7 @@ def execute_build_pipeline(timer: Timer, pipeline: Pipeline, final_build_args: L
                 record_metrics(pipeline, rustc_build)
 
             with stage3.section("Gather profiles"):
-                gather_llvm_bolt_profiles(pipeline)
+                gather_llvm_bolt_profiles(pipeline, runner)
 
         # LLVM is not being cleared here, we want to reuse the previous build
         print_free_disk_space(pipeline)
@@ -832,6 +852,8 @@ if __name__ == "__main__":
 
     timer = Timer()
     pipeline = create_pipeline()
+    runner = DefaultBenchmarkRunner(BenchmarkRunner)
+
     try:
         execute_build_pipeline(timer, pipeline, build_args)
     except BaseException as e:
