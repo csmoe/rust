@@ -108,6 +108,7 @@ mod simplify_branches;
 mod simplify_comparison_integral;
 mod single_use_consts;
 mod sroa;
+mod trampoline;
 mod unreachable_enum_branching;
 mod unreachable_prop;
 mod validate;
@@ -541,6 +542,7 @@ fn run_runtime_cleanup_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         &lower_intrinsics::LowerIntrinsics,
         &remove_place_mention::RemovePlaceMention,
         &simplify::SimplifyCfg::PreOptimizations,
+        &trampoline::GenericConvergencePass,
     ];
 
     pm::run_passes(tcx, body, passes, Some(MirPhase::Runtime(RuntimePhase::PostCleanup)));
@@ -620,6 +622,7 @@ fn run_optimization_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
             &prettify::ReorderLocals,
             // Dump the end result for testing and debugging purposes.
             &dump_mir::Marker("PreCodegen"),
+            &trampoline::GenericConvergencePass,
         ],
         Some(MirPhase::Runtime(RuntimePhase::Optimized)),
     );
